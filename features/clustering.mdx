@@ -1,0 +1,374 @@
+---
+title: Clustering Analysis
+description: Group countries by socioeconomic factors and temporal COVID-19 evolution patterns using K-Means and K-Shape algorithms
+---
+
+# Clustering Analysis
+
+The clustering module applies unsupervised machine learning techniques to identify countries with similar COVID-19 dynamics. This grouping reveals common patterns and enables comparative analysis across countries with shared characteristics.
+
+## Overview
+
+Clustering helps answer critical questions:
+
+<CardGroup cols={2}>
+  <Card title="Socioeconomic Similarity" icon="coins">
+    Which countries share similar economic and demographic profiles?
+  </Card>
+  <Card title="Temporal Patterns" icon="wave-pulse">
+    Which countries experienced similar waves and outbreak timing?
+  </Card>
+  <Card title="Policy Effectiveness" icon="shield-check">
+    How did similar countries respond differently to the pandemic?
+  </Card>
+  <Card title="Multi-country Modeling" icon="network-wired">
+    Reduce noise by modeling countries with similar dynamics together
+  </Card>
+</CardGroup>
+
+## Clustering Approaches
+
+The analysis implements three distinct clustering strategies:
+
+### 1. Socioeconomic Clustering (K-Means)
+
+**Method**: K-Means with k=3 clusters  
+**Features**: GDP per capita, median age, life expectancy, population density, stringency index
+
+<Accordion title="K-Means Implementation">
+  ```python
+  # From clustering.ipynb
+  def clusterizar(
+      df, features, n_clusters=3, 
+      scaler=StandardScaler(),
+      method="kmeans"
+  ):
+      # Scale features
+      X_scaled = scaler.fit_transform(features)
+      
+      # Apply K-Means clustering
+      model = KMeans(
+          n_clusters=n_clusters, 
+          n_init=20, 
+          random_state=42
+      )
+      labels = model.fit_predict(X_scaled)
+      
+      # Add cluster assignments
+      df_clustered = features.copy()
+      df_clustered['cluster'] = (labels + 1).astype(str)
+  ```
+  
+  The algorithm groups countries based on static socioeconomic characteristics.
+</Accordion>
+
+#### Cluster Characteristics
+
+<Tabs>
+  <Tab title="Cluster 1">
+    **African Countries**  
+    Generally report lower COVID-19 incidence and mortality rates. Characterized by:
+    - Lower GDP per capita
+    - Younger population (lower median age)
+    - Limited testing infrastructure
+  </Tab>
+  
+  <Tab title="Cluster 2">
+    **Good Socioeconomic Conditions**  
+    Countries with strong economies and moderate incidence:
+    - High GDP per capita
+    - Well-developed healthcare systems
+    - Lower total cases and deaths relative to testing capacity
+  </Tab>
+  
+  <Tab title="Cluster 3">
+    **Excellent Conditions + High Incidence**  
+    Wealthy nations with high reported cases:
+    - Very high GDP per capita
+    - Advanced healthcare and testing
+    - High cases and deaths per capita (possibly due to better detection)
+  </Tab>
+</Tabs>
+
+### 2. Temporal Cases Clustering (K-Shape)
+
+**Method**: K-Shape with k=4 clusters  
+**Feature**: Daily case evolution (time series shape)
+
+<Note>
+  K-Shape is specifically designed for time series clustering, focusing on shape-based distance rather than absolute values.
+</Note>
+
+```python
+# From clustering.ipynb - K-Shape for temporal patterns
+from tslearn.clustering import KShape
+
+model = KShape(n_clusters=4, random_state=42)
+labels = model.fit_predict(time_series_data)
+```
+
+#### Cases Pattern Clusters
+
+<Steps>
+  <Step title="Cluster 1: Single Major Wave">
+    Countries with very low daily cases throughout, except for one significant wave
+  </Step>
+  
+  <Step title="Cluster 2: Dominant Wave + Minor Peaks">
+    One large wave that may be substantial, followed by smaller secondary peaks
+  </Step>
+  
+  <Step title="Cluster 3: Multiple Moderate Peaks">
+    Several waves of moderate importance, with one standing out as larger
+  </Step>
+  
+  <Step title="Cluster 4: Multiple Major Waves">
+    Countries experiencing more than one large-magnitude outbreak wave
+  </Step>
+</Steps>
+
+### 3. Temporal Deaths Clustering (K-Shape)
+
+**Method**: K-Shape with k=3 clusters  
+**Feature**: Daily deaths evolution (time series shape)
+
+```python
+# From covid_app/clustering.py:95-100
+def muestra_grafica_pais(df, tip_mcluster, colores_dict, pais):
+    if tip_mcluster == "caseskshape4":
+        indicador_col = 'new_cases_smoothed'
+    elif tip_mcluster == "deathskshape3":
+        indicador_col = 'new_deaths_smoothed'
+```
+
+#### Deaths Pattern Clusters
+
+<Tabs>
+  <Tab title="Cluster 1">
+    **Single Considerable Wave**  
+    One significant mortality wave followed by minor peaks
+  </Tab>
+  
+  <Tab title="Cluster 2">
+    **Multiple Similar Waves**  
+    Several mortality waves of comparable magnitude throughout the pandemic
+  </Tab>
+  
+  <Tab title="Cluster 3">
+    **Single Wave (Smaller)**  
+    Similar to Cluster 1 but with a smaller magnitude primary wave
+  </Tab>
+</Tabs>
+
+## Feature Engineering
+
+For temporal clustering, the analysis extracts statistical features from time series:
+
+<Accordion title="TSFresh Feature Extraction">
+  ```python
+  # From clustering.ipynb
+  from tsfresh.feature_extraction.settings import ComprehensiveFCParameters
+  from tsfresh.utilities.dataframe_functions import impute
+  
+  # Extract comprehensive features from time series
+  ts_features = tsfresh.extract_features(
+      df_timeseries,
+      column_id='country',
+      column_sort='date',
+      default_fc_parameters=ComprehensiveFCParameters()
+  )
+  
+  # Impute any missing values
+  impute(ts_features)
+  ```
+  
+  TSFresh extracts 700+ statistical features including:
+  - Autocorrelation coefficients
+  - Fourier transform coefficients  
+  - Aggregated features (mean, variance, skewness, kurtosis)
+  - Peak counts and positions
+</Accordion>
+
+## Dimensionality Reduction (PCA)
+
+Principal Component Analysis reduces feature dimensionality while preserving variance:
+
+```python
+# From clustering.ipynb:244-303
+def aplica_acp(df, varexplicada=0.85, scaler=StandardScaler()):
+    # Scale features
+    scaler.set_output(transform="pandas")
+    ts_features_scaled = scaler.fit_transform(df)
+    
+    # PCA to retain 85% variance
+    pca = PCA(n_components=varexplicada)
+    pca_projections = pca.fit_transform(ts_features_scaled)
+    
+    print(f"Number of components: {pca.n_components_}")
+    print(f"Variance explained: {pca.explained_variance_ratio_.sum()*100:.2f}%")
+    
+    return pca_projections
+```
+
+<Tip>
+  PCA typically reduces 700+ features to 10-20 principal components while retaining 85% of variance, improving clustering efficiency.
+</Tip>
+
+## Optimal Cluster Selection
+
+Silhouette score determines the optimal number of clusters:
+
+```python
+# From clustering.ipynb:306-392
+def seleccionar_mejor_k_clusters(
+    data,
+    rango_clusters=range(2, 11),
+    method="kmeans"
+):
+    silhouette_scores = []
+    
+    for n_clusters in rango_clusters:
+        if method == "kmeans":
+            model = KMeans(n_clusters=n_clusters, random_state=42)
+        elif method == "kmedoids":
+            model = KMedoids(n_clusters=n_clusters, random_state=42)
+        
+        labels = model.fit_predict(data)
+        score = silhouette_score(data, labels)
+        silhouette_scores.append(score)
+    
+    best_n = silhouette_scores.index(max(silhouette_scores)) + 2
+    return best_n, max(silhouette_scores)
+```
+
+<Note>
+  Silhouette scores range from -1 to 1. Higher values indicate better-defined clusters. Scores above 0.5 suggest strong clustering structure.
+</Note>
+
+## Interactive Visualization
+
+The Streamlit app provides interactive cluster exploration:
+
+```python
+# From covid_app/clustering.py:255-280
+with col1:    
+    clustering_seleccionado = st.selectbox(
+        "Choose clustering criterion:",
+        options=["Socioeconomic factors", 
+                 "Daily cases evolution", 
+                 "Daily deaths evolution"]
+    )
+
+with col2:
+    cluster_sel = st.radio(
+        'Select cluster to visualize:', 
+        clusters,
+        horizontal=True
+    )
+
+with col3:
+    pais_seleccionado = st.selectbox(
+        "Visualize a country:",
+        options=paises_es
+    )
+```
+
+### Geographic Distribution Map
+
+For socioeconomic clustering, a world map shows cluster distribution:
+
+<Accordion title="Geographic Visualization Code">
+  ```python
+  # From covid_app/clustering.py:295-359
+  fig_map = px.scatter_geo(
+      map_df,
+      lat="lat",
+      lon="lon",
+      color=tip_cluster,
+      hover_name="country",
+      color_discrete_map={
+          "1": "blue",
+          "2": "green",
+          "3": "orange"
+      },
+      projection="natural earth"
+  )
+  
+  fig_map.update_layout(
+      geo=dict(
+          showland=True,
+          landcolor="lightgray",
+          showocean=True,
+          oceancolor="lightblue"
+      )
+  )
+  ```
+</Accordion>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Policy Comparison" icon="scale-balanced">
+    Compare how countries in the same cluster implemented different policies and their outcomes
+  </Card>
+  <Card title="Predictive Modeling" icon="crystal-ball">
+    Train models on multiple countries from the same cluster to improve predictions
+  </Card>
+  <Card title="Resource Allocation" icon="hand-holding-medical">
+    Identify countries facing similar challenges for coordinated resource sharing
+  </Card>
+  <Card title="Best Practices" icon="trophy">
+    Find successful strategies within cluster groups for knowledge transfer
+  </Card>
+</CardGroup>
+
+## Example Countries by Cluster
+
+### Socioeconomic Clusters (K-Means, k=3)
+
+| Cluster | Example Countries | Characteristics |
+|---------|------------------|------------------|
+| 1 | Most African nations | Low GDP, younger population |
+| 2 | Brazil, Mexico, India, Turkey | Moderate GDP, mixed outcomes |
+| 3 | USA, UK, Spain, France, Germany | High GDP, high testing, high cases |
+
+### Temporal Clusters (K-Shape, k=4 for cases)
+
+Countries are grouped by outbreak wave patterns regardless of absolute case numbers, focusing on temporal dynamics.
+
+## Technologies Used
+
+- **scikit-learn**: K-Means, StandardScaler, PCA, silhouette analysis
+- **tslearn**: K-Shape algorithm for time series clustering
+- **TSFresh**: Automated time series feature extraction
+- **Plotly**: Interactive cluster visualizations
+- **Streamlit**: Interactive web interface
+
+## Clustering Output Files
+
+Cluster assignments are saved to:
+
+```
+covid_app/datasets/outputs/cluster-countries.csv
+```
+
+Containing columns:
+- `country`: Country name
+- `cluster_kmeans3`: Socioeconomic cluster (1-3)
+- `cluster_caseskshape4`: Cases pattern cluster (1-4)
+- `cluster_deathskshape3`: Deaths pattern cluster (1-3)
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Exploratory Analysis" icon="chart-bar" href="/features/exploratory-analysis">
+    Understand the features used for clustering
+  </Card>
+  <Card title="Predictive Modeling" icon="brain" href="/features/predictive-modeling">
+    Use clusters to improve multi-country forecasting
+  </Card>
+</CardGroup>
+
+<Card title="Live Clustering App" icon="external-link" href="https://covid19-data-analytics-owid-xasv8wrmsgkmtautyfywth.streamlit.app/">
+  Explore clusters interactively and visualize country patterns
+</Card>

@@ -1,0 +1,427 @@
+---
+title: 'Time Series Forecasting'
+description: 'Build SARIMAX models to forecast COVID-19 deaths'
+---
+
+# Time Series Forecasting with SARIMAX
+
+This guide demonstrates how to build SARIMAX (Seasonal AutoRegressive Integrated Moving Average with eXogenous variables) models for forecasting daily COVID-19 deaths. The approach uses cluster information and exogenous variables to improve predictions.
+
+## Why SARIMAX?
+
+SARIMAX models are suitable for COVID-19 death prediction because they:
+
+- **Capture temporal dependencies**: Model both short and long-term patterns in time series
+- **Handle seasonality**: Account for weekly and seasonal patterns in reporting
+- **Incorporate exogenous variables**: Include factors like cases, vaccination rates, and government measures
+- **Provide interpretability**: Understand the contribution of each factor to predictions
+
+<Warning>
+Forecasting COVID-19 deaths is challenging due to:
+- **Limited data**: Only ~1,460 daily observations per country (4 years)
+- **High volatility**: Reporting delays, new variants, and policy changes introduce noise
+- **Non-stationarity**: The pandemic evolved through distinct phases (waves)
+</Warning>
+
+## Methodology
+
+<Steps>
+
+### Load Libraries and Data
+
+```python
+# Core libraries
+import pandas as pd
+import numpy as np
+import warnings
+warnings.filterwarnings("ignore")
+
+# SARIMAX modeling
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+import pmdarima as pm
+from pmdarima import auto_arima
+
+# Evaluation metrics
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+
+# Visualizations
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+import seaborn as sns
+
+# Auxiliary functions
+import aux_functions as aux
+
+# Load data
+df = aux.load_dataset_fromcsv(
+    "owid-covid-data-clean.csv",
+    "schema-clean.json"
+)
+
+# Load cluster information
+countries_cluster = aux.load_dataset_fromcsv("cluster-countries.csv")
+df = df.merge(
+    countries_cluster[['country', 'cluster_deathskshape11']],
+    on='country'
+).rename(columns={'cluster_deathskshape11': 'cluster'})
+```
+
+### Prepare Target Variable
+
+We use `new_deaths_smoothed_per_million` as the target variable:
+- **Smoothed**: Reduces the impact of reporting delays and weekend effects
+- **Per million**: Enables comparison across countries with different populations
+
+```python
+target = 'new_deaths_smoothed_per_million'
+
+# Filter data for Spain (our target country)
+df_spain = df[df['country'] == 'Spain'].copy()
+df_spain = df_spain.sort_values('date').reset_index(drop=True)
+
+print(f"Data range: {df_spain['date'].min()} to {df_spain['date'].max()}")
+print(f"Total observations: {len(df_spain)}")
+```
+
+### Create Lagged Features
+
+Add lagged values to capture temporal dependencies:
+
+```python
+def crear_lags(df, lags_cases, lags_deaths):
+    """
+    Create lagged features for cases and deaths
+    """
+    df = df.copy()
+    
+    # Lags for cases
+    for lag in lags_cases:
+        df[f'new_cases_lag{lag}'] = df['new_cases_smoothed_per_million'].shift(lag)
+    
+    # Lags for deaths
+    for lag in lags_deaths:
+        df[f'new_deaths_lag{lag}'] = df[target].shift(lag)
+    
+    # Remove NaN rows created by lagging
+    df = df.dropna().reset_index(drop=True)
+    
+    return df
+
+# Define lags
+lags_cases = [7, 14, 21]  # 1, 2, and 3 weeks
+lags_deaths = [7, 14]     # 1 and 2 weeks
+
+df_spain = crear_lags(df_spain, lags_cases, lags_deaths)
+```
+
+### Select Exogenous Variables
+
+Include variables that influence death rates:
+
+```python
+exog_vars = [
+    'new_cases_smoothed_per_million',  # Current cases
+    'stringency_index',                # Government measures
+    'vaccination_ratio',               # Vaccination coverage
+    'new_cases_lag7',                  # Lagged cases
+    'new_cases_lag14',
+    'new_cases_lag21',
+    'new_deaths_lag7',                 # Lagged deaths
+    'new_deaths_lag14'
+]
+
+print(f"Using {len(exog_vars)} exogenous variables")
+```
+
+### Train-Test Split
+
+Use time-based splitting (no shuffling for time series):
+
+```python
+# Define training size (e.g., first 425 days = ~14 months)
+min_train_size = 425
+
+# Split data
+train_data = df_spain[:min_train_size].copy()
+test_data = df_spain[min_train_size:].copy()
+
+y_train = train_data[target]
+X_train = train_data[exog_vars]
+
+y_test = test_data[target]
+X_test = test_data[exog_vars]
+
+print(f"Training samples: {len(y_train)}")
+print(f"Testing samples: {len(y_test)}")
+```
+
+### Automatic Model Selection with auto_arima
+
+Use `auto_arima` to find optimal SARIMAX parameters:
+
+```python
+# Find best SARIMAX parameters
+print("Finding optimal SARIMAX parameters...")
+
+auto_model = pm.auto_arima(
+    y_train,
+    exogenous=X_train,
+    seasonal=True,
+    m=7,                    # Weekly seasonality
+    stepwise=True,
+    suppress_warnings=True,
+    error_action='ignore',
+    trace=True,
+    max_p=3, max_q=3,       # Non-seasonal orders
+    max_P=2, max_Q=2,       # Seasonal orders
+    D=1,                    # Seasonal differencing
+    information_criterion='aic'
+)
+
+print("\nBest model:")
+print(auto_model.summary())
+
+# Extract best parameters
+order = auto_model.order
+seasonal_order = auto_model.seasonal_order
+print(f"\nOrder (p,d,q): {order}")
+print(f"Seasonal order (P,D,Q,m): {seasonal_order}")
+```
+
+**Example output:**
+```
+Order (p,d,q): (1, 1, 1)
+Seasonal order (P,D,Q,m): (1, 1, 1, 7)
+```
+
+<Tip>
+**SARIMAX parameter interpretation:**
+- **p, d, q**: Non-seasonal AR, differencing, MA orders
+- **P, D, Q, m**: Seasonal AR, differencing, MA orders, and period
+- **m=7**: Weekly seasonality (7 days)
+</Tip>
+
+### Rolling Forecast with Retraining
+
+Implement one-step-ahead rolling forecast:
+
+```python
+def rolling_forecast_sarimax(
+    y_train, X_train,
+    y_test, X_test,
+    order, seasonal_order,
+    retrain=True,
+    retrain_period=30
+):
+    """
+    Perform rolling one-step-ahead forecast with optional retraining
+    """
+    predictions = []
+    actuals = []
+    
+    # Initial model training
+    model = SARIMAX(
+        y_train,
+        exog=X_train,
+        order=order,
+        seasonal_order=seasonal_order,
+        enforce_stationarity=False,
+        enforce_invertibility=False
+    )
+    res = model.fit(disp=False, maxiter=200)
+    
+    # Rolling forecast
+    for i in range(len(y_test)):
+        # One-step-ahead prediction
+        exog_future = X_test.iloc[i:i+1]
+        pred = res.forecast(steps=1, exog=exog_future)[0]
+        
+        predictions.append(pred)
+        actuals.append(y_test.iloc[i])
+        
+        # Retrain model periodically
+        if retrain and (i + 1) % retrain_period == 0:
+            # Append new data to training set
+            y_extended = pd.concat([y_train, y_test.iloc[:i+1]])
+            X_extended = pd.concat([X_train, X_test.iloc[:i+1]])
+            
+            # Refit model
+            model = SARIMAX(
+                y_extended,
+                exog=X_extended,
+                order=order,
+                seasonal_order=seasonal_order,
+                enforce_stationarity=False,
+                enforce_invertibility=False
+            )
+            res = model.fit(disp=False, maxiter=200)
+            print(f"Retrained at step {i+1}/{len(y_test)}")
+    
+    return np.array(predictions), np.array(actuals)
+
+# Run rolling forecast
+predictions, actuals = rolling_forecast_sarimax(
+    y_train, X_train,
+    y_test, X_test,
+    order=order,
+    seasonal_order=seasonal_order,
+    retrain=True,
+    retrain_period=30
+)
+```
+
+### Model Evaluation
+
+Calculate performance metrics:
+
+```python
+# Calculate metrics
+rmse = np.sqrt(mean_squared_error(actuals, predictions))
+mae = mean_absolute_error(actuals, predictions)
+mape = np.mean(np.abs((actuals - predictions) / (actuals + 1e-10))) * 100
+
+print("\n📊 Model Performance:")
+print(f"RMSE: {rmse:.4f}")
+print(f"MAE: {mae:.4f}")
+print(f"MAPE: {mape:.2f}%")
+
+# Create results dataframe
+df_results = pd.DataFrame({
+    'date': test_data['date'].values,
+    'actual': actuals,
+    'predicted': predictions,
+    'error': actuals - predictions
+})
+
+print("\n📈 Sample predictions:")
+print(df_results.head(10))
+```
+
+### Visualize Results
+
+Plot actual vs predicted values:
+
+```python
+plt.figure(figsize=(14, 6))
+
+# Plot actual and predicted
+plt.plot(df_results['date'], df_results['actual'], 
+         label='Actual', color='black', linewidth=2, alpha=0.7)
+plt.plot(df_results['date'], df_results['predicted'], 
+         label='Predicted', color='red', linewidth=2, alpha=0.7)
+
+# Formatting
+plt.title('SARIMAX Forecast: Actual vs Predicted Deaths per Million', fontsize=14)
+plt.xlabel('Date')
+plt.ylabel('Deaths per Million (Smoothed)')
+plt.legend()
+plt.grid(alpha=0.3)
+plt.tight_layout()
+plt.show()
+
+# Plot residuals
+fig, axes = plt.subplots(1, 2, figsize=(14, 4))
+
+# Residuals over time
+axes[0].plot(df_results['date'], df_results['error'], color='orange')
+axes[0].axhline(0, color='black', linestyle='--', linewidth=1)
+axes[0].set_title('Residuals Over Time')
+axes[0].set_xlabel('Date')
+axes[0].set_ylabel('Error (Actual - Predicted)')
+axes[0].grid(alpha=0.3)
+
+# Residual histogram
+axes[1].hist(df_results['error'], bins=30, color='skyblue', edgecolor='black')
+axes[1].set_title('Residual Distribution')
+axes[1].set_xlabel('Error')
+axes[1].set_ylabel('Frequency')
+axes[1].grid(alpha=0.3)
+
+plt.tight_layout()
+plt.show()
+```
+
+### Diagnostic Plots
+
+Check model assumptions:
+
+```python
+# Plot diagnostic plots
+fig = res.plot_diagnostics(figsize=(14, 8))
+plt.tight_layout()
+plt.show()
+```
+
+The diagnostic plots show:
+1. **Standardized residuals**: Should appear random around zero
+2. **Histogram + KDE**: Residuals should be normally distributed
+3. **Q-Q plot**: Points should align with the diagonal line
+4. **Correlogram**: ACF should show no significant autocorrelation
+
+</Steps>
+
+## Advanced Techniques
+
+### Using Cluster Information
+
+Train models on similar countries from the same cluster:
+
+```python
+# Get countries from the same cluster as Spain
+spain_cluster = countries_cluster[countries_cluster['country'] == 'Spain']['cluster'].values[0]
+cluster_countries = countries_cluster[countries_cluster['cluster'] == spain_cluster]['country'].tolist()
+
+print(f"Spain belongs to cluster {spain_cluster}")
+print(f"Cluster countries: {cluster_countries}")
+
+# You can train on pooled data from these countries
+df_cluster = df[df['country'].isin(cluster_countries)].copy()
+```
+
+### Multivariate Forecasting
+
+Forecast both cases and deaths simultaneously:
+
+```python
+from statsmodels.tsa.statespace.varmax import VARMAX
+
+# Prepare multivariate data
+y_multi = df_spain[['new_cases_smoothed_per_million', target]]
+
+# Fit VARMAX model
+varmax_model = VARMAX(y_multi, order=(1, 1))
+varmax_res = varmax_model.fit(disp=False)
+
+print(varmax_res.summary())
+```
+
+## Best Practices
+
+<Tip>
+**Tips for better forecasting:**
+1. **Cross-validation**: Use time series cross-validation for parameter tuning
+2. **Exogenous variables**: Test different combinations of features
+3. **Differencing**: Apply appropriate differencing to achieve stationarity
+4. **Outlier handling**: Consider robust methods or outlier detection
+5. **Ensemble methods**: Combine multiple models for improved accuracy
+</Tip>
+
+## Interpretation
+
+Key findings from SARIMAX modeling:
+
+- **Lagged cases** are strong predictors of deaths (typically 2-3 weeks delay)
+- **Vaccination coverage** shows negative correlation with death rates
+- **Stringency measures** have delayed effects on reducing deaths
+- **Weekly seasonality** captures reporting patterns (fewer reports on weekends)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Predictive Modeling" icon="brain" href="/features/predictive-modeling">
+    Learn more about predictive modeling approaches
+  </Card>
+  <Card title="Visualization Guide" icon="chart-line" href="/guides/visualization">
+    Create interactive forecast visualizations
+  </Card>
+</CardGroup>

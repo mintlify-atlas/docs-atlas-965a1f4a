@@ -1,0 +1,653 @@
+---
+title: 'eda'
+description: 'Interactive exploratory data analysis application for COVID-19 datasets'
+icon: 'chart-line'
+---
+
+## Overview
+
+The `eda` module (located in `covid_app/eda.py`) provides a comprehensive interactive Streamlit application for exploring COVID-19 data. It features KPI dashboards, temporal visualizations, geospatial maps, correlation analysis, and policy impact assessment.
+
+## Import
+
+```python
+from covid_app import eda
+```
+
+---
+
+## Main Function
+
+### main()
+
+Launches the interactive exploratory data analysis Streamlit application.
+
+```python
+eda.main()
+```
+
+**Parameters:** None (reads from `st.session_state`)
+
+**Returns:** None (renders Streamlit UI)
+
+<Note>
+**Application Features:**
+- Interactive filters (continent, country, indicator, KPI mode)
+- Key performance indicators (KPIs) with totals/normalized views
+- Top/bottom country rankings
+- Temporal evolution charts (cases, deaths, vaccinations, tests)
+- Continental comparison analysis
+- Scatter plots with socioeconomic correlations
+- Stringency index analysis with LOWESS curves
+- Interactive Folium map with country markers
+</Note>
+
+#### Example
+
+```python
+import streamlit as st
+from covid_app import eda
+
+# Run as Streamlit app
+if __name__ == "__main__":
+    eda.main()
+```
+
+---
+
+## Filter Functions
+
+### reset_filtros()
+
+Resets all filters to default values in `st.session_state`.
+
+```python
+eda.reset_filtros()
+```
+
+**Returns:** None (modifies session state)
+
+**Default Values:**
+- Continent: "Todos" (All)
+- Country: "Todos" (All)
+- Indicator: "Casos" (Cases)
+- KPI Mode: "Totales" (Totals)
+
+---
+
+### aplicar_filtros()
+
+Applies continent and country filters to the DataFrame.
+
+```python
+eda.aplicar_filtros(df, seleccion_continente, mapping_continente, seleccion_country, mapping_pais=None)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame to filter
+</ParamField>
+
+<ParamField path="seleccion_continente" type="str" required>
+  Selected continent name (in Spanish) or "Todos"
+</ParamField>
+
+<ParamField path="mapping_continente" type="dict" required>
+  Dictionary mapping Spanish continent names to English names
+</ParamField>
+
+<ParamField path="seleccion_country" type="str" required>
+  Selected country name (in Spanish) or "Todos"
+</ParamField>
+
+<ParamField path="mapping_pais" type="dict | None" default="None">
+  Dictionary mapping Spanish country names to English names (required if country selected)
+</ParamField>
+
+**Returns:** `pd.DataFrame` - Filtered DataFrame
+
+#### Example
+
+```python
+from constantes import CONTINENTS_SPANISH, PAISES_SPANISH
+
+# Filter by continent
+df_europe = eda.aplicar_filtros(df, "Europa", CONTINENTS_SPANISH, "Todos")
+
+# Filter by country
+df_spain = eda.aplicar_filtros(df, "Europa", CONTINENTS_SPANISH, "España", PAISES_SPANISH)
+```
+
+---
+
+### filtro_indicadores()
+
+Creates a radio button selector for indicators.
+
+```python
+eda.filtro_indicadores(indicador_options)
+```
+
+<ParamField path="indicador_options" type="dict" required>
+  Dictionary with indicator names as keys and (column_name, label, colorscale) tuples as values
+</ParamField>
+
+**Returns:** `str` - Selected indicator name
+
+#### Example
+
+```python
+from constantes import INDICADOR_OPTIONS
+
+indicador = eda.filtro_indicadores(INDICADOR_OPTIONS)
+print(indicador)  # e.g., "Casos", "Muertes", "Vacunaciones"
+```
+
+---
+
+### filtro_modoKPIS()
+
+Creates a radio button selector for KPI display mode (totals vs. normalized).
+
+```python
+eda.filtro_modoKPIS()
+```
+
+**Returns:** `str` - `"Totales"` or `"Normalizados"`
+
+---
+
+## KPI and Dashboard Functions
+
+### mostrar_kpis()
+
+Displays key performance indicators as styled cards.
+
+```python
+eda.mostrar_kpis(df, mode="Totales")
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Filtered DataFrame with latest data
+</ParamField>
+
+<ParamField path="mode" type="str" default="'Totales'">
+  Display mode: `"Totales"` (absolute numbers) or `"Normalizados"` (per capita)
+</ParamField>
+
+**Returns:** None (renders HTML cards)
+
+**KPIs Displayed:**
+
+<CodeGroup>
+```python Totals Mode
+- Total Cases
+- Total Deaths  
+- Vaccination % (average)
+- Total Tests
+```
+
+```python Normalized Mode
+- Cases per Million
+- Deaths per Million
+- Vaccination % (average)  
+- Tests per Thousand
+```
+</CodeGroup>
+
+#### Example
+
+```python
+eda.mostrar_kpis(df_filtered, mode="Normalizados")
+```
+
+---
+
+### plot_top_bottom_countries()
+
+Creates side-by-side horizontal bar charts showing top and bottom countries for a metric.
+
+```python
+eda.plot_top_bottom_countries(
+    df, column, N=10, 
+    title_top="", title_bottom="", 
+    xlabel="", colorscale=None, indicador_nombre=""
+)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame with country-level data
+</ParamField>
+
+<ParamField path="column" type="str" required>
+  Column name to rank by
+</ParamField>
+
+<ParamField path="N" type="int" default="10">
+  Number of countries to show in each chart
+</ParamField>
+
+<ParamField path="title_top" type="str" default="''">
+  Title for top countries chart
+</ParamField>
+
+<ParamField path="title_bottom" type="str" default="''">
+  Title for bottom countries chart
+</ParamField>
+
+<ParamField path="xlabel" type="str" default="''">
+  X-axis label
+</ParamField>
+
+<ParamField path="colorscale" type="str | list | None" default="None">
+  Plotly colorscale name or custom scale
+</ParamField>
+
+<ParamField path="indicador_nombre" type="str" default="''">
+  Indicator name for hover labels
+</ParamField>
+
+**Returns:** None (renders two Plotly charts side by side)
+
+#### Example
+
+```python
+eda.plot_top_bottom_countries(
+    df, 
+    'total_cases_per_million',
+    N=10,
+    title_top="Countries with Most Cases per Million",
+    title_bottom="Countries with Fewest Cases per Million",
+    colorscale="Reds",
+    indicador_nombre="Cases per Million"
+)
+```
+
+---
+
+## Visualization Functions
+
+### mostrar_graficaComparativa()
+
+Creates a grouped bar chart comparing COVID-19 metrics across continents (normalized).
+
+```python
+eda.mostrar_graficaComparativa(last_df)
+```
+
+<ParamField path="last_df" type="pd.DataFrame" required>
+  DataFrame with latest date per country
+</ParamField>
+
+**Returns:** None (renders Plotly chart)
+
+**Metrics Compared:**
+- Cases per million
+- Deaths per million
+- Tests per thousand
+- Vaccination percentage
+
+<Note>
+Values are normalized to [0, 1] by dividing by the maximum value of each metric, enabling visual comparison across different scales.
+</Note>
+
+#### Example
+
+```python
+latest_df = df.sort_values('date').groupby('country').tail(1)
+eda.mostrar_graficaComparativa(latest_df)
+```
+
+---
+
+### mostrar_graficaVacunacionesVsMuertesCasos()
+
+Creates a dual-axis subplot comparing total vaccinations with daily deaths and cases.
+
+```python
+eda.mostrar_graficaVacunacionesVsMuertesCasos(df, continente, pais="Todos")
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Time series DataFrame
+</ParamField>
+
+<ParamField path="continente" type="str" required>
+  Selected continent name (in Spanish)
+</ParamField>
+
+<ParamField path="pais" type="str" default="'Todos'">
+  Selected country name (in Spanish)
+</ParamField>
+
+**Returns:** None (renders Plotly subplot with 2 rows)
+
+**Charts:**
+1. **Row 1**: Daily deaths (left axis) + Total vaccinations (right axis)
+2. **Row 2**: Daily cases (left axis) + Total vaccinations (right axis)
+
+#### Example
+
+```python
+eda.mostrar_graficaVacunacionesVsMuertesCasos(df_filtered, "Europa", "España")
+```
+
+---
+
+### mostrar_graficaTestsVsCasos()
+
+Creates a dual-axis chart comparing daily tests and daily cases.
+
+```python
+eda.mostrar_graficaTestsVsCasos(df, continente, pais="Todos")
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Time series DataFrame
+</ParamField>
+
+<ParamField path="continente" type="str" required>
+  Selected continent name
+</ParamField>
+
+<ParamField path="pais" type="str" default="'Todos'">
+  Selected country name
+</ParamField>
+
+**Returns:** None (renders Plotly chart)
+
+<Note>
+Automatically filters to the last date where test data is available to avoid showing incomplete data.
+</Note>
+
+---
+
+### scatter_plots()
+
+Creates a three-panel scatter plot exploring socioeconomic correlations.
+
+```python
+eda.scatter_plots(last_df, continent_colors)
+```
+
+<ParamField path="last_df" type="pd.DataFrame" required>
+  DataFrame with latest values per country
+</ParamField>
+
+<ParamField path="continent_colors" type="dict" required>
+  Dictionary mapping continent names to colors
+</ParamField>
+
+**Returns:** None (renders Plotly subplot with 3 columns)
+
+**Panels:**
+
+1. **Tests vs Cases (GDP influence)**
+   - X: Cases per million (log scale)
+   - Y: Tests per thousand (log scale)
+   - Size: GDP per capita
+
+2. **GDP vs Vaccination Coverage**
+   - X: GDP per capita
+   - Y: Vaccination percentage
+   - Fixed marker size
+
+3. **Cases vs Deaths (Age influence)**
+   - X: Cases per million (log scale)
+   - Y: Deaths per million (log scale)
+   - Size: Median age (squared for visibility)
+
+#### Example
+
+```python
+from constantes import CONTINENT_COLORS
+
+latest_df = df.sort_values('date').groupby('country').tail(1)
+eda.scatter_plots(latest_df, CONTINENT_COLORS)
+```
+
+---
+
+## Policy Analysis Functions
+
+### evolucion_stringency_por_continente()
+
+Plots the evolution of the stringency index (government response) by continent.
+
+```python
+eda.evolucion_stringency_por_continente(df)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Full time series DataFrame
+</ParamField>
+
+**Returns:** `plotly.graph_objects.Figure` - Plotly figure object
+
+<Note>
+The stringency index measures the strictness of government policies (lockdowns, travel bans, etc.) on a scale of 0-100.
+</Note>
+
+#### Example
+
+```python
+fig = eda.evolucion_stringency_por_continente(df)
+st.plotly_chart(fig, use_container_width=True)
+```
+
+---
+
+### evolucion_stringency_muertes()
+
+Compares daily deaths with the stringency index on a dual-axis chart.
+
+```python
+eda.evolucion_stringency_muertes(df, continente, pais="Todos")
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Time series DataFrame
+</ParamField>
+
+<ParamField path="continente" type="str" required>
+  Selected continent name
+</ParamField>
+
+<ParamField path="pais" type="str" default="'Todos'">
+  Selected country name
+</ParamField>
+
+**Returns:** `plotly.graph_objects.Figure`
+
+---
+
+### curvas_lowess()
+
+Creates interactive LOWESS regression curves showing the impact of policy stringency on cases and deaths with adjustable time lags.
+
+```python
+eda.curvas_lowess(df, continente, pais="Todos")
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Time series DataFrame
+</ParamField>
+
+<ParamField path="continente" type="str" required>
+  Selected continent name
+</ParamField>
+
+<ParamField path="pais" type="str" default="'Todos'">
+  Selected country name
+</ParamField>
+
+**Returns:** `plotly.graph_objects.Figure` with interactive lag selector
+
+**Features:**
+- **Lag Options**: 0, 15, 30, 40, 60, 80 days
+- **Method**: LOWESS (Locally Weighted Scatterplot Smoothing) with `frac=0.3`
+- **Subplots**: Daily cases (top), Daily deaths (bottom)
+- **Interactive**: Dropdown menu to change lag period
+
+<Note>
+LOWESS curves reveal non-linear relationships between stringency and outcomes. Time lags account for policy implementation delays and incubation periods.
+</Note>
+
+#### Example
+
+```python
+fig = eda.curvas_lowess(df_filtered, "Europa", "España")
+fig.update_layout(height=600)
+st.plotly_chart(fig, use_container_width=True)
+```
+
+---
+
+## Map Functions
+
+### create_country_map()
+
+Creates an interactive Folium map with clustered country markers.
+
+```python
+eda.create_country_map(df_map)
+```
+
+<ParamField path="df_map" type="pd.DataFrame" required>
+  DataFrame with columns: `country`, `lat`, `lon`, `total_cases`, `total_deaths`, `total_vaccinations`, `radius`
+</ParamField>
+
+**Returns:** `folium.Map` - Folium map object
+
+**Map Features:**
+- **Base Layer**: CartoDB Positron (clean, light theme)
+- **Marker Clustering**: Groups nearby countries at low zoom levels
+- **Color Scale**: Blue gradient based on total cases
+- **Popup**: Shows country name, cases, deaths, vaccinations
+- **Circle Size**: Proportional to log(cases)
+
+#### Example
+
+```python
+from streamlit_folium import st_folium
+
+# Prepare map data
+latest_df = df.sort_values('date').groupby('country').tail(1)
+df_map = latest_df[['country','lat','lon','total_cases','total_deaths','total_vaccinations']].dropna()
+df_map['radius'] = 5 + (np.log10(df_map['total_cases'] + 1) - df_map['total_cases'].min()) * 2
+
+# Create and display map
+m = eda.create_country_map(df_map)
+st_folium(m, width=None, height=600)
+```
+
+---
+
+## Data Preparation
+
+The application automatically prepares cached data in `st.session_state`:
+
+```python
+{
+    "datasets": (df, df_weekly, df_monthly, df_quarterly, df_yearly),
+    "last_df": DataFrame,  # Latest date per country
+    "df_map": DataFrame,   # Map-ready data with radius
+    "df_countries": DataFrame  # Country-continent lookup with Spanish names
+}
+```
+
+---
+
+## Constants and Configuration
+
+### Required Constants
+
+Import from `constantes.py`:
+
+```python
+INDICADOR_OPTIONS = {
+    "Casos": ("total_cases_per_million", "Casos por millón", "Blues"),
+    "Muertes": ("total_deaths_per_million", "Muertes por millón", "Reds"),
+    "Vacunaciones": ("vaccination_ratio", "% Vacunados", "Greens"),
+    "Tests": ("total_tests_per_thousand", "Tests por mil", "Purples")
+}
+
+CONTINENTS_SPANISH = {
+    "África": "Africa",
+    "Asia": "Asia",
+    "Europa": "Europe",
+    "América del Norte": "North America",
+    "Oceanía": "Oceania",
+    "América del Sur": "South America"
+}
+
+CONTINENT_COLORS = {
+    "Africa": "#e74c3c",
+    "Asia": "#3498db",
+    "Europe": "#2ecc71",
+    "North America": "#f39c12",
+    "Oceania": "#9b59b6",
+    "South America": "#1abc9c"
+}
+
+PAISES_SPANISH = {
+    "España": "Spain",
+    "Francia": "France",
+    "Alemania": "Germany",
+    # ... complete mapping
+}
+```
+
+---
+
+## Usage Example
+
+<CodeGroup>
+```python Run Standalone
+# In terminal
+streamlit run covid_app/eda.py
+```
+
+```python Multi-Page App Integration
+# pages/2_EDA.py
+import streamlit as st
+from covid_app.eda import main
+
+st.set_page_config(
+    page_title="Exploratory Data Analysis",
+    page_icon="📊",
+    layout="wide"
+)
+
+if __name__ == "__main__":
+    main()
+```
+
+```python Load Required Data
+import pandas as pd
+import streamlit as st
+from covid_app import eda
+
+# Load clean dataset
+df = pd.read_csv('outputs/owid-covid-data-clean.csv')
+
+# Initialize session state
+st.session_state.datasets = (df, None, None, None, None)
+
+# Run EDA app
+eda.main()
+```
+</CodeGroup>
+
+---
+
+## Dependencies
+
+Required packages:
+- `streamlit` - Web application framework
+- `pandas` - Data manipulation
+- `numpy` - Numerical operations  
+- `plotly` - Interactive charts
+- `statsmodels` - LOWESS regression
+- `folium` - Interactive maps
+- `streamlit-folium` - Folium-Streamlit integration
+- `branca` - Folium color utilities

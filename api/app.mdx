@@ -1,0 +1,249 @@
+---
+title: 'app.py'
+description: 'Main Streamlit application module for COVID-19 Data Analytics'
+icon: 'rocket'
+---
+
+## Overview
+
+The `app.py` module serves as the entry point for the COVID-19 Data Analytics Streamlit application. It configures the application layout, creates a navigation menu, and handles page routing between different analysis sections.
+
+## Module Location
+
+```
+covid_app/app.py
+```
+
+## Dependencies
+
+```python
+import streamlit as st
+import numpy as np
+import pandas as pd
+import plotly.express as px
+from streamlit_option_menu import option_menu
+import json
+```
+
+## Functions
+
+### main()
+
+The main entry point function that initializes and runs the Streamlit application.
+
+```python
+def main():
+    st.set_page_config(
+        page_title="Análisis COVID-19",
+        page_icon="📊",
+        layout="wide",
+    )
+    
+    # Menú horizontal superior
+    selected = option_menu(
+        menu_title=None, 
+        options=["Inicio", "Análisis Exploratorio", "Clustering"],
+        icons=["house", "bar-chart","diagram-3"],
+        menu_icon="cast",
+        default_index=0,
+        orientation="horizontal",
+        styles={
+            "container": {"padding": "0!important", "background-color": "#f8f9fa86"},
+            "icon": {"color": "black", "font-size": "20px"},
+            "nav-link": {"font-size": "16px", "text-align": "center", "margin":"0px", "--hover-color": "#eee"},
+            "nav-link-selected": {"background-color": "#4CAF50", "color": "black"},
+        }
+    )
+    
+    # Navegación según opción seleccionada
+    if selected == "Inicio":
+        from inicio import main as inicio_main
+        inicio_main()
+    elif selected == "Análisis Exploratorio":
+        from eda import main as eda_main
+        eda_main()
+    elif selected =="Clustering":
+        from clustering import main as clustering_main
+        clustering_main()
+```
+
+**Functionality:**
+- Configures page layout with wide mode and custom title/icon
+- Creates a horizontal navigation menu with three sections
+- Dynamically imports and executes the selected page module
+- Applies custom styling to the navigation menu
+
+## Page Configuration
+
+The application uses `st.set_page_config()` with the following parameters:
+
+<ParamField path="page_title" type="string" default="Análisis COVID-19">
+  The browser tab title for the application
+</ParamField>
+
+<ParamField path="page_icon" type="string" default="📊">
+  The favicon/emoji displayed in the browser tab
+</ParamField>
+
+<ParamField path="layout" type="string" default="wide">
+  Layout mode for the application (wide or centered)
+</ParamField>
+
+## Navigation System
+
+The app uses `streamlit-option-menu` to create an interactive horizontal navigation bar with three main sections:
+
+### Navigation Options
+
+| Option | Icon | Module | Description |
+|--------|------|--------|-------------|
+| **Inicio** | house | `inicio.py` | Home page with overview and basic visualizations |
+| **Análisis Exploratorio** | bar-chart | `eda.py` | Exploratory Data Analysis with advanced charts |
+| **Clustering** | diagram-3 | `clustering.py` | Country clustering analysis and results |
+
+### Navigation Menu Styling
+
+The navigation menu uses custom CSS styling:
+
+```python
+styles={
+    "container": {"padding": "0!important", "background-color": "#f8f9fa86"},
+    "icon": {"color": "black", "font-size": "20px"},
+    "nav-link": {
+        "font-size": "16px",
+        "text-align": "center",
+        "margin": "0px",
+        "--hover-color": "#eee"
+    },
+    "nav-link-selected": {
+        "background-color": "#4CAF50",
+        "color": "black"
+    },
+}
+```
+
+**Styling Details:**
+- Container has a light gray background (`#f8f9fa86`)
+- Icons are black with 20px font size
+- Selected navigation item has a green background (`#4CAF50`)
+- Hover effect shows light gray background
+
+## Page Routing
+
+The application uses dynamic imports to load page modules based on user selection:
+
+```python
+if selected == "Inicio":
+    from inicio import main as inicio_main
+    inicio_main()
+elif selected == "Análisis Exploratorio":
+    from eda import main as eda_main
+    eda_main()
+elif selected == "Clustering":
+    from clustering import main as clustering_main
+    clustering_main()
+```
+
+This approach ensures:
+- Modules are loaded only when needed
+- Each page has its own `main()` function
+- Clean separation of concerns between pages
+
+## Running the Application
+
+To run the COVID-19 Data Analytics application:
+
+### From Command Line
+
+```bash
+streamlit run covid_app/app.py
+```
+
+### As Python Module
+
+```python
+if __name__ == "__main__":
+    main()
+```
+
+The application will start a local web server (typically at `http://localhost:8501`) and open the app in your default browser.
+
+## Application Structure
+
+The app follows a modular architecture:
+
+```
+covid_app/
+├── app.py              # Main entry point (this module)
+├── inicio.py           # Home page
+├── eda.py             # Exploratory Data Analysis
+├── clustering.py       # Clustering analysis
+├── constantes.py      # Constants and configuration
+└── datasets/          # Data files
+```
+
+## Usage Example
+
+```python
+from covid_app.app import main
+
+# Run the application
+main()
+```
+
+The application will:
+1. Configure the page layout and title
+2. Display the horizontal navigation menu
+3. Load the "Inicio" page by default
+4. Allow users to navigate between different analysis sections
+
+## Configuration Tips
+
+### Customizing Page Title
+
+Modify the `page_title` parameter in `set_page_config()`:
+
+```python
+st.set_page_config(
+    page_title="My Custom COVID-19 Analysis",
+    page_icon="🦠",
+    layout="wide",
+)
+```
+
+### Adding New Navigation Options
+
+To add a new page to the navigation:
+
+1. Add the option name to the `options` list
+2. Add a corresponding icon to the `icons` list
+3. Add a routing condition in the navigation logic
+
+```python
+options=["Inicio", "Análisis Exploratorio", "Clustering", "Nueva Página"]
+icons=["house", "bar-chart", "diagram-3", "star"]
+
+# Add routing
+if selected == "Nueva Página":
+    from nueva_pagina import main as nueva_main
+    nueva_main()
+```
+
+### Changing Layout Mode
+
+Switch between wide and centered layout:
+
+```python
+# Wide layout (uses full browser width)
+layout="wide"
+
+# Centered layout (constrained width)
+layout="centered"
+```
+
+## See Also
+
+- [constants.mdx](/api/constants) - Application constants and configuration values
+- [inicio.py](/api/inicio) - Home page implementation
+- [eda.py](/api/eda) - Exploratory Data Analysis module
+- [clustering.py](/api/clustering) - Clustering analysis module

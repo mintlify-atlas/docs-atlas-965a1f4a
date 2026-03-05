@@ -1,0 +1,365 @@
+---
+title: 'constantes.py'
+description: 'Constants and configuration values for the COVID-19 Data Analytics application'
+icon: 'gear'
+---
+
+## Overview
+
+The `constantes.py` module defines all constant values used throughout the COVID-19 Data Analytics application, including color schemes, indicator configurations, continent mappings, and country name translations.
+
+## Module Location
+
+```
+covid_app/constantes.py
+```
+
+## Color Schemes
+
+Custom color palettes for data visualizations, defined as RGB gradients.
+
+### CUSTOM_BLUES
+
+```python
+CUSTOM_BLUES = [(0.0, "#c6dbef"), (0.5, "#6baed6"), (1.0, "#061e42")]
+```
+
+Blue gradient used for case-related visualizations:
+- Light blue (`#c6dbef`) → Medium blue (`#6baed6`) → Dark blue (`#061e42`)
+
+### CUSTOM_REDS
+
+```python
+CUSTOM_REDS = [(0.0, "#fcbba1"), (0.5, "#fb6a4a"), (1.0, "#67000d")]
+```
+
+Red gradient used for death-related visualizations:
+- Light red (`#fcbba1`) → Medium red (`#fb6a4a`) → Dark red (`#67000d`)
+
+### CUSTOM_GREENS
+
+```python
+CUSTOM_GREENS = [(0.0, "#c7e9c0"), (0.5, "#74c476"), (1.0, "#00441b")]
+```
+
+Green gradient used for vaccination-related visualizations:
+- Light green (`#c7e9c0`) → Medium green (`#74c476`) → Dark green (`#00441b`)
+
+### CUSTOM_YELLOWS
+
+```python
+CUSTOM_YELLOWS = [(0.0, "#fff7bc"), (0.5, "#fec44f"), (1.0, "#ff7519")]
+```
+
+Yellow-orange gradient used for testing-related visualizations:
+- Light yellow (`#fff7bc`) → Medium yellow (`#fec44f`) → Orange (`#ff7519`)
+
+## Indicator Configuration
+
+### INDICADOR_OPTIONS
+
+```python
+INDICADOR_OPTIONS = {
+    'Casos': ('total_cases_per_million', 'Casos totales por millón', CUSTOM_BLUES),
+    'Muertes': ('total_deaths_per_million', 'Muertes totales por millón', CUSTOM_REDS),
+    'Ratio de vacunados': ('vaccination_ratio', 'Ratio de vacunados (%)', CUSTOM_GREENS),
+    'Tests': ('total_tests_per_thousand', 'Pruebas totales por mil habitantes', CUSTOM_YELLOWS)
+}
+```
+
+Maps indicator display names to their configuration:
+
+<ParamField path="Casos" type="tuple">
+  Configuration for COVID-19 cases indicator
+  - Column name: `total_cases_per_million`
+  - Display label: "Casos totales por millón"
+  - Color scheme: `CUSTOM_BLUES`
+</ParamField>
+
+<ParamField path="Muertes" type="tuple">
+  Configuration for death statistics
+  - Column name: `total_deaths_per_million`
+  - Display label: "Muertes totales por millón"
+  - Color scheme: `CUSTOM_REDS`
+</ParamField>
+
+<ParamField path="Ratio de vacunados" type="tuple">
+  Configuration for vaccination rates
+  - Column name: `vaccination_ratio`
+  - Display label: "Ratio de vacunados (%)"
+  - Color scheme: `CUSTOM_GREENS`
+</ParamField>
+
+<ParamField path="Tests" type="tuple">
+  Configuration for testing statistics
+  - Column name: `total_tests_per_thousand`
+  - Display label: "Pruebas totales por mil habitantes"
+  - Color scheme: `CUSTOM_YELLOWS`
+</ParamField>
+
+## Geographic Mappings
+
+### CONTINENTS_SPANISH
+
+```python
+CONTINENTS_SPANISH = {
+    "África": "Africa",
+    "Asia": "Asia",
+    "Europa": "Europe",
+    "Norteamérica": "North America",
+    "Oceanía": "Oceania",
+    "Sudamérica": "South America"
+}
+```
+
+Maps Spanish continent names to English equivalents for data filtering and visualization.
+
+### CONTINENT_COLORS
+
+```python
+CONTINENT_COLORS = {
+    'Africa': '#1f77b4',       # azul
+    'Asia': '#ff7f0e',         # naranja
+    'Europe': '#2ca02c',       # verde
+    'North America': '#d62728',# rojo
+    'South America': '#9467bd',# morado
+    'Oceania': '#8c564b'       # marrón
+}
+```
+
+Assigns consistent colors to each continent for visualizations:
+
+| Continent | Color | Hex Code |
+|-----------|-------|----------|
+| Africa | Blue | `#1f77b4` |
+| Asia | Orange | `#ff7f0e` |
+| Europe | Green | `#2ca02c` |
+| North America | Red | `#d62728` |
+| South America | Purple | `#9467bd` |
+| Oceania | Brown | `#8c564b` |
+
+### PAISES_SPANISH
+
+```python
+PAISES_SPANISH = {
+    "Afganistán": "Afghanistan",
+    "Albania": "Albania",
+    "Argelia": "Algeria",
+    "Andorra": "Andorra",
+    # ... 219 total country mappings
+    "Zambia": "Zambia",
+    "Zimbabue": "Zimbabwe"
+}
+```
+
+Comprehensive dictionary mapping Spanish country names to their English equivalents. Contains 223 country mappings.
+
+**Sample entries:**
+- `"España": "Spain"`
+- `"Estados Unidos": "United States"`
+- `"Reino Unido": "United Kingdom"`
+- `"México": "Mexico"`
+- `"Argentina": "Argentina"`
+- `"China": "China"`
+- `"Japón": "Japan"`
+
+## Usage Examples
+
+### Importing Constants
+
+```python
+from constantes import PAISES_SPANISH, INDICADOR_OPTIONS, CONTINENT_COLORS
+```
+
+### Using Country Translations
+
+```python
+from constantes import PAISES_SPANISH
+
+# Translate Spanish country name to English
+spanish_country = "España"
+english_country = PAISES_SPANISH[spanish_country]
+print(english_country)  # Output: Spain
+
+# Filter DataFrame by Spanish country name
+df_spain = df[df['country'] == PAISES_SPANISH['España']]
+```
+
+### Using Indicator Configuration
+
+```python
+from constantes import INDICADOR_OPTIONS
+
+# Get configuration for a specific indicator
+indicador = 'Casos'
+column_name, display_label, color_scheme = INDICADOR_OPTIONS[indicador]
+
+print(column_name)     # total_cases_per_million
+print(display_label)   # Casos totales por millón
+print(color_scheme)    # [(0.0, '#c6dbef'), (0.5, '#6baed6'), (1.0, '#061e42')]
+```
+
+### Using Continent Colors
+
+```python
+from constantes import CONTINENT_COLORS
+import plotly.express as px
+
+# Create a scatter plot with continent colors
+fig = px.scatter(
+    df,
+    x='total_cases',
+    y='total_deaths',
+    color='continent',
+    color_discrete_map=CONTINENT_COLORS
+)
+```
+
+### Creating Dropdown Options
+
+```python
+from constantes import PAISES_SPANISH
+import streamlit as st
+
+# Create a dropdown with Spanish country names
+paises_espanol = sorted(PAISES_SPANISH.keys())
+pais_seleccionado = st.selectbox(
+    "Selecciona un país:",
+    options=paises_espanol
+)
+
+# Convert to English for data filtering
+pais_ingles = PAISES_SPANISH[pais_seleccionado]
+df_filtered = df[df['country'] == pais_ingles]
+```
+
+### Building Color Maps
+
+```python
+from constantes import CUSTOM_BLUES
+import plotly.graph_objects as go
+
+# Use custom color scheme in choropleth map
+fig = go.Figure(data=go.Choropleth(
+    locations=df['iso_code'],
+    z=df['total_cases_per_million'],
+    colorscale=CUSTOM_BLUES,
+    colorbar_title="Cases per Million"
+))
+```
+
+### Translating Continent Names
+
+```python
+from constantes import CONTINENTS_SPANISH
+import streamlit as st
+
+# Create dropdown with Spanish continent names
+continente_seleccionado = st.selectbox(
+    "Selecciona un continente:",
+    options=list(CONTINENTS_SPANISH.keys())
+)
+
+# Get English name for filtering
+continente_ingles = CONTINENTS_SPANISH[continente_seleccionado]
+df_continent = df[df['continent'] == continente_ingles]
+```
+
+## Complete Country List
+
+The `PAISES_SPANISH` dictionary includes translations for 223 countries and territories, organized alphabetically in Spanish:
+
+**Examples by region:**
+
+**Europe:** Albania, Alemania (Germany), Austria, Bélgica (Belgium), España (Spain), Francia (France), Italia (Italy), Reino Unido (United Kingdom)
+
+**Americas:** Argentina, Brasil (Brazil), Canadá (Canada), Chile, Colombia, Estados Unidos (United States), México (Mexico), Perú (Peru)
+
+**Asia:** China, India, Japón (Japan), Corea del Sur (South Korea), Tailandia (Thailand), Vietnam
+
+**Africa:** Egipto (Egypt), Sudáfrica (South Africa), Marruecos (Morocco), Nigeria
+
+**Oceania:** Australia, Nueva Zelanda (New Zealand), Fiyi (Fiji)
+
+## Integration with Other Modules
+
+The constants are used throughout the application:
+
+### In inicio.py
+
+```python
+from constantes import PAISES_SPANISH
+
+# Create country dropdown with Spanish names
+paises_es = ["Todos"] + sorted([
+    esp for esp, ing in PAISES_SPANISH.items()
+    if ing in df['country'].unique().tolist()
+])
+```
+
+### In EDA Module
+
+```python
+from constantes import INDICADOR_OPTIONS, CONTINENT_COLORS
+
+# Configure indicator visualization
+for indicator_name, (col, label, colors) in INDICADOR_OPTIONS.items():
+    create_visualization(df, col, label, colors)
+```
+
+### In Clustering Module
+
+```python
+from constantes import CONTINENT_COLORS
+
+# Color clusters by continent
+fig = px.scatter(
+    df_clustered,
+    x='PC1',
+    y='PC2',
+    color='continent',
+    color_discrete_map=CONTINENT_COLORS
+)
+```
+
+## Best Practices
+
+### Adding New Countries
+
+When adding new countries to `PAISES_SPANISH`:
+
+```python
+PAISES_SPANISH = {
+    # ... existing countries
+    "Nuevo País": "New Country",
+}
+```
+
+### Adding New Indicators
+
+To add a new indicator configuration:
+
+```python
+INDICADOR_OPTIONS = {
+    # ... existing indicators
+    'Hospitalizaciones': (
+        'hosp_patients_per_million',
+        'Hospitalizaciones por millón',
+        CUSTOM_PURPLES  # Define new color scheme if needed
+    ),
+}
+```
+
+### Creating Custom Color Schemes
+
+Define new color gradients following the same pattern:
+
+```python
+CUSTOM_PURPLES = [(0.0, "#e0d5e8"), (0.5, "#9370db"), (1.0, "#4b0082")]
+```
+
+## See Also
+
+- [app.mdx](/api/app) - Main application module that uses these constants
+- [inicio.py](/api/inicio) - Home page implementation using country translations
+- [eda.py](/api/eda) - EDA module using indicator configurations

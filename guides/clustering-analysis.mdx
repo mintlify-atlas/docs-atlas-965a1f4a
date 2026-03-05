@@ -1,0 +1,401 @@
+---
+title: 'Clustering Analysis'
+description: 'Group countries by similar COVID-19 patterns using clustering algorithms'
+---
+
+# Clustering Analysis
+
+This guide demonstrates how to apply clustering techniques to group countries with similar COVID-19 pandemic patterns. Clustering helps identify common characteristics and evolution patterns across different regions.
+
+## Why Clustering?
+
+The COVID-19 pandemic showed significant differences across countries in terms of infections, mortality, and healthcare response. These variations can be attributed to demographic, economic, social, and political factors. Clustering allows us to:
+
+- **Group similar countries**: Identify countries with comparable pandemic trajectories
+- **Reduce noise**: Model multiple time series collectively to minimize individual noise
+- **Enable targeted strategies**: Design response measures adapted to specific country groups
+- **Improve forecasting**: Train models on clusters for better predictions
+
+<Steps>
+
+### Load Libraries and Data
+
+```python
+# Data manipulation
+import pandas as pd
+import numpy as np
+
+# Visualizations
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+# Clustering algorithms
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score
+from sklearn.cluster import KMeans
+from sklearn_extra.cluster import KMedoids
+from tslearn.clustering import KShape
+
+# Auxiliary functions
+import aux_functions as aux
+
+# Load datasets
+df = aux.load_dataset_fromcsv(
+    "owid-covid-data-clean.csv",
+    "schema-clean.json"
+)
+```
+
+### Socioeconomic Clustering
+
+As a first approach, cluster countries based on socioeconomic characteristics:
+
+```python
+# Select socioeconomic features
+socioeconomic_features = [
+    'gdp_per_capita',
+    'median_age',
+    'life_expectancy',
+    'population_density',
+    'hospital_beds_per_thousand',
+    'human_development_index'
+]
+
+# Get unique country data
+df_country = df.groupby('country')[socioeconomic_features].first().dropna()
+
+# Apply PCA for dimensionality reduction
+def aplica_acp(df, varexplicada=0.85, scaler=StandardScaler()):
+    """
+    Apply PCA to reduce dimensions while preserving variance
+    """
+    scaler.set_output(transform="pandas")
+    data_scaled = scaler.fit_transform(df)
+    
+    # Full PCA to determine components
+    pca_full = PCA()
+    pca_full.fit(data_scaled)
+    
+    # Find minimum components for target variance
+    cumsum = np.cumsum(pca_full.explained_variance_ratio_)
+    n_components = np.argmax(cumsum >= varexplicada) + 1
+    
+    # Apply PCA with selected components
+    pca = PCA(n_components=varexplicada)
+    pca_projections = pca.fit_transform(data_scaled)
+    pca_df = pd.DataFrame(
+        pca_projections,
+        index=df.index,
+        columns=[f"PC{i}" for i in range(1, pca.n_components_ + 1)]
+    )
+    
+    print(f"Components selected: {pca.n_components_}")
+    print(f"Variance explained: {pca.explained_variance_ratio_.sum()*100:.2f}%")
+    
+    return pca_df
+
+# Apply PCA
+pca_features = aplica_acp(df_country, varexplicada=0.85)
+```
+
+### Determine Optimal Number of Clusters
+
+Use the silhouette score to find the best number of clusters:
+
+```python
+def seleccionar_mejor_k_clusters(
+    data,
+    rango_clusters=range(2, 11),
+    method="kmeans",
+    plot=True
+):
+    """
+    Find optimal number of clusters using silhouette score
+    """
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(data)
+    
+    silhouette_scores = []
+    cluster_sizes = []
+    
+    for n_clusters in rango_clusters:
+        if method == "kmeans":
+            model = KMeans(n_clusters=n_clusters, n_init=20, random_state=42)
+        elif method == "kmedoids":
+            model = KMedoids(n_clusters=n_clusters, init='k-medoids++', random_state=42)
+        
+        labels = model.fit_predict(X_scaled)
+        score = silhouette_score(X_scaled, labels)
+        silhouette_scores.append(score)
+        
+        _, counts = np.unique(labels, return_counts=True)
+        cluster_sizes.append(counts.tolist())
+    
+    if plot:
+        plt.figure(figsize=(8, 5))
+        plt.plot(rango_clusters, silhouette_scores, marker='o', color='blue')
+        plt.title(f"Silhouette Score vs Number of Clusters ({method})")
+        plt.xlabel("Number of Clusters")
+        plt.ylabel("Silhouette Score")
+        plt.grid(True, alpha=0.6)
+        plt.show()
+    
+    best_k = rango_clusters[np.argmax(silhouette_scores)]
+    best_score = max(silhouette_scores)
+    
+    print(f"Best number of clusters: {best_k}")
+    print(f"Silhouette score: {best_score:.3f}")
+    
+    return best_k, best_score
+
+# Find optimal k
+best_k, score = seleccionar_mejor_k_clusters(
+    pca_features,
+    rango_clusters=range(2, 11),
+    method="kmeans"
+)
+```
+
+### Apply K-Means Clustering
+
+Perform clustering with the optimal number of clusters:
+
+```python
+def clusterizar(
+    df,
+    features,
+    n_clusters=3,
+    method="kmeans",
+    plot=True
+):
+    """
+    Apply clustering and visualize results
+    """
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(features)
+    
+    if method == "kmeans":
+        model = KMeans(n_clusters=n_clusters, n_init=20, random_state=42)
+    elif method == "kmedoids":
+        model = KMedoids(n_clusters=n_clusters, init='k-medoids++', random_state=42)
+    
+    labels = model.fit_predict(X_scaled)
+    
+    # Add cluster labels
+    df_clustered = features.copy()
+    df_clustered['cluster'] = (labels + 1).astype(str)
+    
+    print("Cluster sizes:")
+    print(df_clustered['cluster'].value_counts().sort_index())
+    
+    if plot:
+        # Merge with original data
+        df_plot = df.merge(
+            df_clustered[['cluster']],
+            left_on='country',
+            right_index=True
+        )
+        df_plot = df_plot[df_plot['date'] == df_plot['date'].max()]
+        
+        # Scatter plot
+        fig = px.scatter(
+            df_plot,
+            x='total_cases_per_million',
+            y='total_deaths_per_million',
+            color='cluster',
+            hover_name='country',
+            title='Cases vs Deaths by Cluster'
+        )
+        fig.update_layout(template="plotly_white")
+        fig.show()
+    
+    return df_clustered
+
+# Apply clustering
+df_clusters = clusterizar(
+    df,
+    pca_features,
+    n_clusters=best_k,
+    method="kmeans"
+)
+```
+
+### K-Shape Clustering for Time Series
+
+For time series data, K-Shape algorithm is more appropriate:
+
+```python
+from tslearn.clustering import KShape
+from tslearn.preprocessing import TimeSeriesScalerMeanVariance
+
+# Prepare time series data
+def prepare_timeseries_data(df, metric='new_deaths_smoothed_per_million'):
+    """
+    Reshape data for time series clustering
+    """
+    countries = df['country'].unique()
+    ts_data = []
+    
+    for country in countries:
+        country_data = df[df['country'] == country][metric].values
+        ts_data.append(country_data)
+    
+    # Convert to numpy array with same length
+    min_length = min(len(ts) for ts in ts_data)
+    ts_array = np.array([ts[:min_length] for ts in ts_data])
+    
+    return ts_array, countries
+
+# Get time series data
+ts_data, countries = prepare_timeseries_data(df, 'new_deaths_smoothed_per_million')
+
+# Normalize time series
+scaler = TimeSeriesScalerMeanVariance()
+ts_scaled = scaler.fit_transform(ts_data)
+
+# Apply K-Shape
+ks = KShape(n_clusters=3, random_state=42, verbose=True)
+labels = ks.fit_predict(ts_scaled)
+
+# Create cluster dataframe
+df_kshape = pd.DataFrame({
+    'country': countries,
+    'cluster': labels + 1
+})
+
+print("K-Shape cluster sizes:")
+print(df_kshape['cluster'].value_counts())
+```
+
+### Visualize Cluster Examples
+
+Visualize time series from each cluster:
+
+```python
+def plot_cluster_random_examples(
+    df,
+    y_col,
+    cluster_col="cluster",
+    n_examples=3,
+    seed=42
+):
+    """
+    Plot random examples from each cluster
+    """
+    np.random.seed(seed)
+    clusters = sorted(df[cluster_col].unique())
+    
+    fig = make_subplots(
+        rows=len(clusters),
+        cols=1,
+        subplot_titles=[f"Cluster {c}" for c in clusters],
+        shared_xaxes=True
+    )
+    
+    colors = px.colors.qualitative.Set1
+    
+    for i, cluster in enumerate(clusters, start=1):
+        df_cluster = df[df[cluster_col] == cluster]
+        countries = df_cluster['country'].unique()
+        selected = np.random.choice(
+            countries,
+            size=min(n_examples, len(countries)),
+            replace=False
+        )
+        
+        for j, country in enumerate(selected):
+            country_data = df_cluster[df_cluster['country'] == country]
+            fig.add_trace(
+                go.Scatter(
+                    x=country_data['date'],
+                    y=country_data[y_col],
+                    mode='lines',
+                    name=country,
+                    line=dict(color=colors[j % len(colors)])
+                ),
+                row=i,
+                col=1
+            )
+    
+    fig.update_layout(
+        height=300*len(clusters),
+        title="Time Series Evolution by Cluster",
+        showlegend=False
+    )
+    fig.show()
+
+# Merge clusters with original data
+df_with_clusters = df.merge(df_kshape, on='country')
+
+# Plot examples
+plot_cluster_random_examples(
+    df_with_clusters,
+    'new_deaths_smoothed_per_million',
+    n_examples=3
+)
+```
+
+<Tip>
+K-Shape clustering works better for time series data because it uses shape-based distance metrics, capturing the temporal patterns more effectively than traditional Euclidean distance.
+</Tip>
+
+### Cluster Interpretation
+
+Analyze cluster characteristics:
+
+```python
+# Calculate cluster statistics
+cluster_stats = df_with_clusters.groupby('cluster').agg({
+    'total_cases_per_million': 'mean',
+    'total_deaths_per_million': 'mean',
+    'gdp_per_capita': 'mean',
+    'median_age': 'mean',
+    'vaccination_ratio': 'max',
+    'stringency_index': 'mean'
+}).round(2)
+
+print("\nCluster Characteristics:")
+print(cluster_stats)
+
+# Visualize cluster profiles
+fig = go.Figure()
+for cluster in cluster_stats.index:
+    fig.add_trace(go.Scatterpolar(
+        r=cluster_stats.loc[cluster].values,
+        theta=cluster_stats.columns,
+        fill='toself',
+        name=f'Cluster {cluster}'
+    ))
+
+fig.update_layout(
+    polar=dict(radialaxis=dict(visible=True)),
+    title="Cluster Profiles"
+)
+fig.show()
+```
+
+</Steps>
+
+## Key Insights
+
+<Warning>
+When interpreting clusters, consider:
+- **Data quality**: Missing values or outliers can affect clustering results
+- **Temporal dynamics**: Pandemic patterns evolved over time
+- **External factors**: Policy changes and variants introduced discontinuities
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Time Series Forecasting" icon="chart-line" href="/guides/time-series-forecasting">
+    Use clusters to improve forecasting models
+  </Card>
+  <Card title="Visualization Guide" icon="chart-bar" href="/guides/visualization">
+    Create advanced visualizations of clustering results
+  </Card>
+</CardGroup>

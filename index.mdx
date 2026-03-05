@@ -1,97 +1,203 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Welcome to COVID-19 Data Analytics"
+description: "Explore global COVID-19 trends through interactive data analysis, clustering, and predictive modeling"
 ---
 
-## Setting up
+<div style={{
+  background: 'linear-gradient(135deg, #082546 0%, #cc4c48 100%)',
+  padding: '3rem 2rem',
+  borderRadius: '4px',
+  color: 'white',
+  marginBottom: '2rem'
+}}>
+  <h1 style={{ fontSize: '2.5rem', fontWeight: 700, marginBottom: '1rem', color: 'white' }}>
+    COVID-19 Data Analytics Platform
+  </h1>
+  <p style={{ fontSize: '1.25rem', opacity: 0.95, maxWidth: '800px', color: 'white' }}>
+    Comprehensive analysis and visualization of global COVID-19 data from Our World in Data. Explore trends, discover patterns through clustering, and leverage predictive models for insights.
+  </p>
+</div>
 
-Get your documentation site up and running in minutes.
+## Overview
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+This project provides a complete data analytics platform for understanding the COVID-19 pandemic through multiple analytical lenses. Built on top of the comprehensive [Our World in Data](https://ourworldindata.org/coronavirus) COVID-19 dataset, it combines exploratory data analysis, machine learning clustering, and time-series forecasting into an interactive Streamlit application.
 
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Live Application" icon="browser" href="https://covid19-data-analytics-owid-xasv8wrmsgkmtautyfywth.streamlit.app/">
+    Access the deployed interactive dashboard
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running in minutes
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="View on GitHub" icon="github" href="https://github.com/carlosperman/covid19-data-analytics-owid">
+    Explore the source code
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="API Reference" icon="code" href="/api/aux-functions">
+    Browse the Python modules
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Key Features
 
-Everything you need to create world-class documentation.
+<AccordionGroup>
+  <Accordion title="Interactive Streamlit Dashboard" icon="chart-line">
+    Explore COVID-19 data through an intuitive web interface with multiple analysis views:
+    - **Inicio**: Project overview and navigation
+    - **Análisis Exploratorio**: Global and continental trend visualization
+    - **Clustering**: Pattern discovery across countries
+  </Accordion>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+  <Accordion title="K-Shape Clustering for Temporal Patterns" icon="diagram-project">
+    Advanced clustering algorithms identify countries with similar COVID-19 trajectory patterns:
+    - Socioeconomic factor-based grouping
+    - Temporal evolution clustering using K-Shape algorithm
+    - Daily cases and deaths pattern analysis
+  </Accordion>
 
-## Need inspiration?
+  <Accordion title="SARIMAX Time-Series Forecasting" icon="chart-area">
+    Predictive modeling for COVID-19 deaths in Spain:
+    - One-day forecast horizon
+    - Vaccination rate as exogenous variable
+    - **RMSE: 0.078** | **MAE: 0.0197**
+  </Accordion>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+  <Accordion title="Comprehensive Exploratory Analysis" icon="magnifying-glass-chart">
+    Deep dive into global COVID-19 trends:
+    - Cases, deaths, tests, and vaccination tracking
+    - Correlation analysis with socioeconomic indicators
+    - GDP per capita, median age, and stringency index studies
+  </Accordion>
+</AccordionGroup>
+
+## What's Inside
+
+<CardGroup cols={3}>
+  <Card title="Jupyter Notebooks" icon="book">
+    Complete analysis workflows for data cleaning, EDA, clustering, and modeling
+  </Card>
+  <Card title="Python Modules" icon="python">
+    Reusable utilities for data preprocessing, visualization, and analysis
+  </Card>
+  <Card title="Streamlit App" icon="window">
+    Production-ready web application with interactive visualizations
+  </Card>
+  <Card title="Real Data" icon="database">
+    Our World in Data COVID-19 comprehensive dataset
+  </Card>
+  <Card title="Statistical Models" icon="calculator">
+    SARIMAX forecasting and correlation analysis
+  </Card>
+  <Card title="ML Clustering" icon="sitemap">
+    K-Shape and traditional clustering algorithms
+  </Card>
+</CardGroup>
+
+## Use Cases
+
+<Steps>
+  <Step title="Research & Analysis">
+    Investigate COVID-19 trends across countries and continents, identify correlations with socioeconomic factors, and understand pandemic dynamics.
+  </Step>
+  
+  <Step title="Data Science Learning">
+    Study end-to-end data science workflows including data cleaning, exploratory analysis, clustering, and time-series forecasting with real-world data.
+  </Step>
+  
+  <Step title="Policy Insights">
+    Analyze the relationship between stringency measures, vaccination rates, and COVID-19 outcomes across different countries.
+  </Step>
+  
+  <Step title="Comparative Studies">
+    Compare pandemic trajectories across countries with similar socioeconomic profiles through clustering analysis.
+  </Step>
+</Steps>
+
+## Technology Stack
+
+<CodeGroup>
+
+```python Data Analysis
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import seaborn as sns
+import matplotlib.pyplot as plt
+```
+
+```python Machine Learning
+from sklearn.impute import KNNImputer
+from sklearn.cluster import KMeans
+from tslearn.clustering import TimeSeriesKMeans
+import statsmodels.api as sm
+from pmdarima import auto_arima
+```
+
+```python Streamlit App
+import streamlit as st
+from streamlit_option_menu import option_menu
+import plotly.express as px
+```
+
+</CodeGroup>
+
+<Note>
+  The project uses Python 3.x with popular data science libraries including pandas, scikit-learn, statsmodels, tslearn, and Streamlit for the web interface.
+</Note>
+
+## Getting Started
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Set up your local environment
+  </Card>
+  <Card title="Quick Start Tutorial" icon="play" href="/quickstart">
+    Run your first analysis
+  </Card>
+  <Card title="Explore Features" icon="compass" href="/features/exploratory-analysis">
+    Learn about core capabilities
+  </Card>
+  <Card title="Analysis Guides" icon="book-open" href="/guides/eda-workflow">
+    Follow step-by-step workflows
+  </Card>
+</CardGroup>
+
+## Project Structure
+
+```
+covid19-data-analytics-owid/
+├── covid_app/              # Streamlit web application
+│   ├── app.py             # Main application entry point
+│   ├── inicio.py          # Home page
+│   ├── eda.py             # Exploratory analysis page
+│   └── clustering.py      # Clustering analysis page
+├── cleaning.ipynb         # Data cleaning workflow
+├── eda.ipynb              # Exploratory data analysis
+├── clustering.ipynb       # Clustering analysis
+├── models.ipynb           # Predictive modeling
+├── aux_functions.py       # Utility functions
+└── datasets/              # Compressed data files
+```
+
+<Tip>
+  Datasets in the repository are compressed. Extract them before running notebooks locally, and update file paths in the code accordingly.
+</Tip>
+
+## Next Steps
+
+<Steps>
+  <Step title="Install Dependencies">
+    Follow the [installation guide](/installation) to set up your Python environment with all required packages.
+  </Step>
+  
+  <Step title="Explore the App">
+    Visit the [live Streamlit app](https://covid19-data-analytics-owid-xasv8wrmsgkmtautyfywth.streamlit.app/) to interact with the analysis results.
+  </Step>
+  
+  <Step title="Run Notebooks">
+    Execute the Jupyter notebooks to reproduce the analysis or adapt them for your own research.
+  </Step>
+  
+  <Step title="Customize Analysis">
+    Modify the Python modules and notebooks to analyze specific countries, time periods, or variables.
+  </Step>
+</Steps>

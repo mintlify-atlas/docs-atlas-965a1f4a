@@ -1,0 +1,391 @@
+---
+title: Data Cleaning
+description: Comprehensive data cleaning pipeline for the COVID-19 dataset
+---
+
+The data cleaning pipeline transforms the raw Our World in Data COVID-19 dataset into a high-quality, analysis-ready format. This process addresses missing values, validates data integrity, and ensures consistency across all variables.
+
+## Cleaning Workflow
+
+The cleaning process is implemented in `cleaning.py` and follows a systematic workflow defined in the `clean_dataset()` function:
+
+<Steps>
+
+<Step title="Schema Validation">
+Validates that all required columns are present in the dataset using the `_validate_schema()` function. This ensures the dataset contains the expected structure before processing.
+
+```python cleaning.py
+def _validate_schema(df: pd.DataFrame, required_cols: list):
+    df_cols = set(df.columns)
+    req_cols = set(required_cols)
+
+    missing = req_cols - df_cols
+    extra = df_cols - req_cols
+
+    if missing or extra:
+        msg = []
+        if missing:
+            msg.append(f"Faltan columnas: {', '.join(missing)}")
+        if extra:
+            msg.append(f"Sobran columnas: {', '.join(extra)}")
+        raise ValueError("El dataset no contiene las columnas correctas. " + " | ".join(msg))
+    
+    return df
+```
+
+The function expects 61 required columns including cases, deaths, tests, vaccinations, and socioeconomic indicators.
+</Step>
+
+<Step title="Column Standardization">
+Standardizes column names to lowercase and removes extra whitespace using `_standardize_cols()`.
+
+```python cleaning.py
+def _standardize_cols(df: pd.DataFrame):
+    try:
+        col_map = {c: c.strip().lower() for c in df.columns}
+        df = df.rename(columns=col_map)
+    except Exception as e:
+        print(f"Error al estandarizar nombres de columnas: {e}")
+    return df
+```
+</Step>
+
+<Step title="Date Parsing">
+Converts the date column to datetime format and removes records with invalid dates using `_parse_dates()`.
+
+```python cleaning.py
+def _parse_dates(df: pd.DataFrame, date_col='date'):
+    try:
+        df[date_col] = pd.to_datetime(df[date_col], errors='coerce')
+    except Exception as e:
+        print(f"Error al convertir la columna '{date_col}' a datetime: {e}")
+        return 
+    return df.dropna(subset=[date_col])
+```
+</Step>
+
+<Step title="Feature Engineering">
+Creates temporal features from the date column (covered in detail in [preprocessing](/data/preprocessing)).
+</Step>
+
+<Step title="Record Filtering">
+Filters the dataset to include only:
+- **Date range**: 2020-01-01 to 2023-12-31
+- **Sovereign countries**: 195 countries (excludes territories and regional aggregates)
+- **Valid cases**: Countries that reported at least one COVID-19 case
+
+Implemented in the `_remove_records()` function.
+</Step>
+
+<Step title="Missing Value Imputation">
+The core cleaning step that handles missing values using multiple strategies (detailed below).
+</Step>
+
+<Step title="Additional Columns">
+Adds derived columns including geographic coordinates and vaccination ratios.
+</Step>
+
+<Step title="Data Type Optimization">
+Optimizes memory usage by converting data types:
+- Categorical variables: `country`, `code`, `continent`
+- Float optimization: `float64` → `float32`
+- Integer optimization: temporal features to `int8`
+</Step>
+
+</Steps>
+
+## Missing Value Handling
+
+The `_impute_missing()` function implements a sophisticated imputation strategy tailored to each variable type. The dataset has significant missing values, with some variables missing over 80% of observations.
+
+### Strategy Overview
+
+<Accordion title="1. Variable Elimination">
+
+Variables with excessive missingness (>90%) or limited analytical value are removed:
+
+```python cleaning.py
+lvars = ['weekly_icu_admissions', 'weekly_icu_admissions_per_million',
+         'excess_mortality','excess_mortality_cumulative',
+         'excess_mortality_cumulative_absolute','excess_mortality_cumulative_per_million',
+         'weekly_hosp_admissions', 'weekly_hosp_admissions_per_million',
+         'icu_patients','icu_patients_per_million',
+         'hosp_patients', 'hosp_patients_per_million','reproduction_rate']
+aux.elimina_varsdf(df, lvars)
+```
+
+These variables have inconsistent reporting across countries and time periods, making reliable imputation impossible.
+
+</Accordion>
+
+<Accordion title="2. Life Expectancy and HDI">
+
+Life expectancy and Human Development Index data are merged from the UNDP Human Development Report 2025, providing annual values for 2020-2023.
+
+**Process:**
+1. Load HDR composite indices dataset
+2. Handle specific country corrections (e.g., Central African Republic, Somalia)
+3. Reshape from wide to long format
+4. Merge with main dataset by country code and year
+5. Apply forward fill within countries
+6. Impute remaining missing values with continent-year averages
+
+```python cleaning.py
+# Forward fill within countries
+df['life_expectancy'] = df.groupby('code')['life_expectancy'].ffill()
+df['human_development_index'] = df.groupby('code')['human_development_index'].ffill()
+
+# Impute with continent-year means
+medias = df.groupby(['continent', 'year'])[['life_expectancy', 'human_development_index']].mean().reset_index()
+df = df.merge(medias, on=['continent', 'year'], suffixes=('', '_mean'))
+df['life_expectancy'] = df['life_expectancy'].fillna(df['life_expectancy_mean'])
+df['human_development_index'] = df['human_development_index'].fillna(df['human_development_index_mean'])
+```
+
+</Accordion>
+
+<Accordion title="3. Cumulative Variables (Cases, Deaths, Tests, Vaccinations)">
+
+Cumulative variables use a specialized imputation function that:
+1. Imputes 0 for dates before the first reported positive value
+2. Applies linear interpolation for gaps between reported values
+3. Uses forward fill for trailing missing values
+
+Implemented via the `imputar_valores_previos_primer_informado_multi()` function from `aux_functions.py`:
+
+```python aux_functions.py
+def imputar_valores_previos_primer_informado_multi(df, cols, method='interpolation', 
+                                                    imputAllNaN=True, valimputacion=0):
+    """
+    Imputes null values in specified columns before the first value > 0 by country.
+    
+    Args:
+        df: DataFrame with 'country', 'date' columns
+        cols: list of column names to impute
+        method: 'interpolation' or 'ffill' for remaining nulls
+        imputAllNaN: if True, impute all rows if no value > 0 exists
+        valimputacion: value to impute for nulls before first positive value
+    """
+```
+
+**Applied to:**
+- `total_boosters`, `total_vaccinations`, `people_vaccinated`, `people_fully_vaccinated`
+- `total_tests`
+- `total_deaths`, `total_cases`
+
+</Accordion>
+
+<Accordion title="4. Derived Daily Variables">
+
+After imputing cumulative variables, daily change variables are calculated:
+
+```python cleaning.py
+# Calculate daily changes
+df['new_vaccinations'] = df.groupby('country')['total_vaccinations'].diff().fillna(0).clip(lower=0)
+df['new_deaths'] = df.groupby('country')['total_deaths'].diff().fillna(0).clip(lower=0)
+df['new_cases'] = df.groupby('country')['total_cases'].diff().fillna(0).clip(lower=0)
+df['new_tests'] = df.groupby('country')['total_tests'].diff().fillna(0).clip(lower=0)
+
+# Calculate 7-day rolling averages
+df['new_vaccinations_smoothed'] = df.groupby('country')['new_vaccinations'].transform(
+    lambda x: x.rolling(window=7, min_periods=1).mean()
+)
+```
+
+**Per-capita rates** are then calculated by dividing by population and scaling appropriately (per million, per hundred, per thousand).
+
+</Accordion>
+
+<Accordion title="5. Test Positivity Metrics">
+
+`tests_per_case` and `positive_rate` require special handling:
+
+```python cleaning.py
+# Calculate tests per case (avoiding division by zero)
+df['tests_per_case'] = np.where(
+    (df['new_cases_smoothed'].isna()) | (df['new_cases_smoothed'] == 0),
+    np.nan,
+    df['new_tests_smoothed'] / df['new_cases_smoothed']
+)
+
+# Impute missing values
+df = aux.imputar_valores_previos_primer_informado(df, 'tests_per_case')
+df['tests_per_case'] = df.groupby('country')['tests_per_case'].transform(
+    lambda x: x.interpolate(method='linear').ffill()
+)
+
+# Positive rate is inverse of tests per case
+df['positive_rate'] = np.where(df['tests_per_case'] > 0, 1 / df['tests_per_case'], 0)
+```
+
+</Accordion>
+
+<Accordion title="6. Stringency Index">
+
+The stringency index (government response measure) uses ARIMA forecasting for missing values:
+
+**Process:**
+1. Identify countries that never reported stringency data → impute with 0
+2. For other countries, calculate mean stringency across all reporting countries by date
+3. Fit an Auto-ARIMA model to predict future values beyond the last reported date
+4. Fill missing values with predictions
+5. Set any negative predictions to 0
+
+```python cleaning.py
+# Fit ARIMA model to mean stringency index
+model = auto_arima(mean_index,
+                   seasonal=False,
+                   stepwise=True,
+                   suppress_warnings=True,
+                   error_action="ignore")
+
+# Forecast for dates beyond last valid date
+forecast = model.predict(n_periods=len(forecast_index))
+```
+
+This approach leverages the global trend in policy stringency to estimate missing country-level values.
+
+</Accordion>
+
+<Accordion title="7. Handwashing Facilities">
+
+Countries without data on handwashing facilities are assumed to have universal access:
+
+```python cleaning.py
+df.loc[df['handwashing_facilities'].isna(), 'handwashing_facilities'] = 100
+```
+
+This conservative assumption is appropriate given that most missing data comes from developed countries.
+
+</Accordion>
+
+<Accordion title="8. GDP per Capita">
+
+Missing GDP values are imputed with the continent mean:
+
+```python cleaning.py
+media_continente = df.groupby('continent')['gdp_per_capita'].transform('mean')
+df['gdp_per_capita'] = df['gdp_per_capita'].fillna(media_continente)
+```
+
+</Accordion>
+
+<Accordion title="9. KNN Imputation for Related Variables">
+
+Two variables use K-Nearest Neighbors imputation based on correlated features:
+
+**Extreme Poverty:**
+Imputed using `gdp_per_capita` as the predictor (high correlation between poverty and GDP).
+
+```python cleaning.py
+from sklearn.impute import KNNImputer
+
+df_paises = df[['code', 'gdp_per_capita', 'extreme_poverty']].drop_duplicates(subset='code').set_index('code')
+knn_data = df_paises[['gdp_per_capita', 'extreme_poverty']]
+imputer = KNNImputer(n_neighbors=5)
+knn_result = imputer.fit_transform(knn_data)
+df_paises['extreme_poverty'] = knn_result[:, 1]
+```
+
+**Hospital Beds:**
+Imputed using `gdp_per_capita`, `life_expectancy`, and `human_development_index`.
+
+```python cleaning.py
+df_paises = df.groupby('code').agg({
+    'gdp_per_capita': 'first', 
+    'hospital_beds_per_thousand': 'first', 
+    'life_expectancy': 'mean',
+    'human_development_index': 'mean'
+}).reset_index()
+
+knn_data = df_paises[['gdp_per_capita', 'life_expectancy', 
+                       'human_development_index', 'hospital_beds_per_thousand']]
+imputer = KNNImputer(n_neighbors=5)
+knn_result = imputer.fit_transform(knn_data)
+df_paises['hospital_beds_per_thousand'] = knn_result[:, 3]
+```
+
+</Accordion>
+
+<Accordion title="10. Diabetes Prevalence">
+
+Imputed with continent mean:
+
+```python cleaning.py
+media_continente = df.groupby('continent')['diabetes_prevalence'].transform('mean')
+df['diabetes_prevalence'] = df['diabetes_prevalence'].fillna(media_continente)
+```
+
+</Accordion>
+
+## Data Quality Checks
+
+Throughout the cleaning process, several quality checks are performed:
+
+### Duplicate Detection
+The workflow removes duplicate records based on country-date combinations.
+
+### Outlier Handling
+Daily change variables are clipped at zero using `.clip(lower=0)` to prevent negative values caused by data corrections.
+
+### Consistency Checks
+Vaccination ratios are capped at 100% to handle data reporting errors:
+
+```python cleaning.py
+df['vaccination_ratio'] = ((df['people_vaccinated'] / df['population']) * 100).clip(upper=100)
+df['fully_vaccination_ratio'] = ((df['people_fully_vaccinated'] / df['population']) * 100).clip(upper=100)
+```
+
+### Missing Data Removal
+Countries that never reported any cases are removed from the dataset:
+
+```python cleaning.py
+country_max_total = df.groupby('country')['total_cases'].max().reset_index()
+no_cases_countries = country_max_total[country_max_total['total_cases'] == 0]['country'].tolist()
+df = df[~df['country'].isin(no_cases_countries)]
+```
+
+## Usage Example
+
+The complete cleaning pipeline is executed via the `clean_dataset()` function:
+
+```python cleaning.py
+from cleaning import clean_dataset
+import pandas as pd
+
+# Load raw data
+df_raw = pd.read_csv("https://catalog.ourworldindata.org/garden/covid/latest/compact/compact.csv")
+
+# Clean the dataset
+df_clean, df_weekly, df_monthly, df_quarterly, df_yearly = clean_dataset(
+    df_raw,
+    ruta_csv="outputs/owid-covid-data-clean.csv",
+    ruta_schema="outputs/schemas/schema-clean.json",
+    gen_summaries=True,
+    start_date='2020-01-01',
+    end_date='2023-12-31'
+)
+```
+
+<Note>
+The `gen_summaries=True` option generates additional datasets aggregated at weekly, monthly, quarterly, and yearly levels for time series analysis.
+</Note>
+
+## Performance
+
+The cleaning pipeline processes the full dataset (approximately 280,000 rows) in under 2 minutes on a standard laptop, with execution time logged at the end:
+
+```python
+Tiempo de ejecución de la limpieza del dataset: 98.42 segundos
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dataset Overview" icon="database" href="/data/dataset-overview">
+    Review the raw dataset structure and variables
+  </Card>
+  <Card title="Preprocessing" icon="gears" href="/data/preprocessing">
+    Explore feature engineering and transformations
+  </Card>
+</CardGroup>

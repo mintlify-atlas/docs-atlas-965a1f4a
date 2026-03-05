@@ -1,0 +1,386 @@
+---
+title: 'aux_functions'
+description: 'Auxiliary functions for COVID-19 data analysis and preprocessing'
+icon: 'wrench'
+---
+
+## Overview
+
+The `aux_functions` module provides a comprehensive set of utility functions for data analysis, preprocessing, and visualization of COVID-19 datasets. It includes functions for preliminary data analysis, missing value detection, data imputation, and dataset I/O operations with schema preservation.
+
+## Import
+
+```python
+import aux_functions as aux
+```
+
+---
+
+## Functions
+
+### preanalyze_data()
+
+Generates a comprehensive preliminary analysis report of a DataFrame, including structure, missing values, duplicates, unique values, and date columns.
+
+```python
+aux.preanalyze_data(df)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame to analyze
+</ParamField>
+
+**Returns:** None (prints analysis report to console)
+
+<Note>
+The report includes:
+- Dataset dimensions and structure
+- Percentage of null values per column
+- Empty cells in object columns
+- Duplicate records count
+- Unique values per column
+- Data types per column
+- Detected date columns with ranges
+</Note>
+
+#### Example
+
+```python
+import pandas as pd
+import aux_functions as aux
+
+df = pd.read_csv('owid-covid-data.csv')
+aux.preanalyze_data(df)
+```
+
+---
+
+### cols_with_nan()
+
+Identifies columns containing null values and returns the percentage of missing data per column, sorted in descending order.
+
+```python
+aux.cols_with_nan(df)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame to analyze
+</ParamField>
+
+**Returns:** `dict` - Dictionary with column names as keys and percentage of null values as values, sorted by percentage (descending)
+
+#### Example
+
+```python
+import pandas as pd
+import aux_functions as aux
+
+df = pd.read_csv('owid-covid-data.csv')
+null_columns = aux.cols_with_nan(df)
+print(null_columns)
+# Output: {'weekly_icu_admissions': 98.5, 'hosp_patients': 95.2, ...}
+```
+
+---
+
+### percentage_nas()
+
+Calculates and prints the percentage of null values in a specific column.
+
+```python
+aux.percentage_nas(df, col)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame containing the data
+</ParamField>
+
+<ParamField path="col" type="str" required>
+  Name of the column to analyze
+</ParamField>
+
+**Returns:** None (prints percentage to console)
+
+**Raises:** `ValueError` if the column doesn't exist in the DataFrame
+
+#### Example
+
+```python
+aux.percentage_nas(df, 'total_vaccinations')
+# Output: Porcentaje de nulos en total_vaccinations: 45.23%
+```
+
+---
+
+### elimina_varsdf()
+
+Removes specified columns from a DataFrame in place.
+
+```python
+aux.elimina_varsdf(df, lvars)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame from which to remove columns
+</ParamField>
+
+<ParamField path="lvars" type="str | list | tuple | set" required>
+  Column name (string) or iterable of column names to remove
+</ParamField>
+
+**Returns:** None (modifies DataFrame in place)
+
+<Note>
+Non-existent columns trigger a warning but don't raise an error. The function only removes columns that exist in the DataFrame.
+</Note>
+
+#### Example
+
+```python
+# Remove single column
+aux.elimina_varsdf(df, 'excess_mortality')
+
+# Remove multiple columns
+aux.elimina_varsdf(df, ['icu_patients', 'hosp_patients', 'reproduction_rate'])
+```
+
+---
+
+### imputar_valores_previos_primer_informado()
+
+Imputes null values before the first informed value (> 0) per country, with optional interpolation for remaining nulls.
+
+```python
+aux.imputar_valores_previos_primer_informado(
+    df, col, method=None, imputAllNaN=True, valimputacion=0
+)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame with at least 'country', 'date', and the target column
+</ParamField>
+
+<ParamField path="col" type="str" required>
+  Name of the column to impute
+</ParamField>
+
+<ParamField path="method" type="str | None" default="None">
+  Imputation method for remaining nulls after initial imputation:
+  - `'interpolation'`: Linear interpolation with forward fill
+  - `'ffill'`: Forward fill propagation
+  - `None`: No additional imputation
+</ParamField>
+
+<ParamField path="imputAllNaN" type="bool" default="True">
+  If True, impute all values with `valimputacion` when no values > 0 are found for a country
+</ParamField>
+
+<ParamField path="valimputacion" type="float | int" default="0">
+  Value to use for imputing nulls before the first informed value
+</ParamField>
+
+**Returns:** `pd.DataFrame` - Modified DataFrame copy with imputed values
+
+#### Example
+
+```python
+# Impute zeros before first case, then interpolate
+df_clean = aux.imputar_valores_previos_primer_informado(
+    df, 'total_cases', method='interpolation', valimputacion=0
+)
+```
+
+---
+
+### imputar_valores_previos_primer_informado_multi()
+
+Imputes null values before the first value > 0 per country for multiple columns simultaneously.
+
+```python
+aux.imputar_valores_previos_primer_informado_multi(
+    df, cols, method=None, imputAllNaN=True, valimputacion=0
+)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame with 'country', 'date', and target columns
+</ParamField>
+
+<ParamField path="cols" type="list" required>
+  List of column names to impute
+</ParamField>
+
+<ParamField path="method" type="str | None" default="None">
+  Imputation method: `'interpolation'`, `'ffill'`, or `None`
+</ParamField>
+
+<ParamField path="imputAllNaN" type="bool" default="True">
+  Whether to impute all values if no value > 0 is found
+</ParamField>
+
+<ParamField path="valimputacion" type="float | int" default="0">
+  Value for imputing nulls before first informed value
+</ParamField>
+
+**Returns:** `pd.DataFrame` - Modified DataFrame with all specified columns imputed
+
+#### Example
+
+```python
+cols_to_impute = [
+    'total_cases', 'total_deaths', 'total_tests', 
+    'total_vaccinations', 'people_vaccinated'
+]
+
+df_clean = aux.imputar_valores_previos_primer_informado_multi(
+    df, cols_to_impute, method='interpolation', valimputacion=0
+)
+```
+
+---
+
+### save_dataset_to_csv()
+
+Saves a DataFrame to CSV and optionally exports its schema (data types) to a JSON file.
+
+```python
+aux.save_dataset_to_csv(df, ruta_csv, ruta_schema=None)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame to save
+</ParamField>
+
+<ParamField path="ruta_csv" type="str" required>
+  Path where the CSV file will be saved (`.csv` extension added automatically if missing)
+</ParamField>
+
+<ParamField path="ruta_schema" type="str | None" default="None">
+  Path where the schema JSON file will be saved (optional)
+</ParamField>
+
+**Returns:** None (creates files on disk)
+
+<Note>
+The schema file stores column names as keys and their data types as string values, enabling precise type restoration when loading the dataset.
+</Note>
+
+#### Example
+
+```python
+aux.save_dataset_to_csv(
+    df, 
+    'datasets/outputs/owid-covid-data-clean.csv',
+    'datasets/outputs/schemas/schema-clean.json'
+)
+# Output:
+# Esquema guardado correctamente en: datasets/outputs/schemas/schema-clean.json
+# Dataset guardado correctamente en: datasets/outputs/owid-covid-data-clean.csv
+```
+
+---
+
+### load_dataset_fromcsv()
+
+Loads a DataFrame from CSV with optional schema restoration for preserving data types.
+
+```python
+aux.load_dataset_fromcsv(ruta_csv, ruta_schema=None, index_col=False)
+```
+
+<ParamField path="ruta_csv" type="str" required>
+  Path to the CSV file to load
+</ParamField>
+
+<ParamField path="ruta_schema" type="str | None" default="None">
+  Path to the schema JSON file (optional). If provided, data types are restored exactly as saved
+</ParamField>
+
+<ParamField path="index_col" type="bool" default="False">
+  Whether to use the first column as the index
+</ParamField>
+
+**Returns:** `pd.DataFrame` - Loaded DataFrame with types restored (if schema provided)
+
+#### Example
+
+<CodeGroup>
+```python Without Schema
+# Load without schema (pandas default types)
+df = aux.load_dataset_fromcsv('datasets/outputs/owid-covid-data-clean.csv')
+```
+
+```python With Schema
+# Load with schema (exact type restoration)
+df = aux.load_dataset_fromcsv(
+    'datasets/outputs/owid-covid-data-clean.csv',
+    'datasets/outputs/schemas/schema-clean.json'
+)
+```
+</CodeGroup>
+
+---
+
+### visualizar_porcentaje_datos_disponibles()
+
+Visualizes the percentage of informed (non-null) values for a variable grouped by another column.
+
+```python
+aux.visualizar_porcentaje_datos_disponibles(df, var, agr)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Input DataFrame
+</ParamField>
+
+<ParamField path="var" type="str" required>
+  Variable name for which to calculate availability percentage
+</ParamField>
+
+<ParamField path="agr" type="str" required>
+  Column name to group by (e.g., 'country', 'continent', 'year')
+</ParamField>
+
+**Returns:** None (displays bar plot)
+
+<Note>
+Only groups with > 0% availability are shown in the visualization. The title includes the percentage of groups that report this variable.
+</Note>
+
+#### Example
+
+```python
+# Visualize vaccination data availability by country
+aux.visualizar_porcentaje_datos_disponibles(
+    df, var='total_vaccinations', agr='country'
+)
+```
+
+---
+
+## Additional Utility Functions
+
+### col_with_na()
+
+Checks if a column contains missing values.
+
+```python
+aux.col_with_na(df, col)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  DataFrame to check
+</ParamField>
+
+<ParamField path="col" type="str" required>
+  Column name
+</ParamField>
+
+**Returns:** `bool` - True if column contains any null values
+
+#### Example
+
+```python
+if aux.col_with_na(df, 'total_deaths'):
+    print("Column has missing values")
+```

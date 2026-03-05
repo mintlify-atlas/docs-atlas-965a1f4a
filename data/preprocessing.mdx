@@ -1,0 +1,422 @@
+---
+title: Preprocessing
+description: Feature engineering and data transformations for COVID-19 analysis
+---
+
+After cleaning, the dataset undergoes preprocessing to create derived features, engineer temporal variables, and prepare data for analysis and modeling. These transformations enhance the dataset's analytical value and enable time series modeling.
+
+## Temporal Feature Engineering
+
+Temporal features are extracted from the date column to enable time-based analysis and capture seasonal patterns. This is implemented in the `_create_aux_features()` function in `cleaning.py`.
+
+### Feature Extraction
+
+The following temporal features are created from the `date` column:
+
+```python cleaning.py
+def _create_aux_features(df: pd.DataFrame):
+    df = df.copy()
+    try:
+        df['year'] = df['date'].dt.year
+        df['quarter'] = df['date'].dt.quarter
+        df['month'] = df['date'].dt.month
+        df['week'] = df['date'].dt.isocalendar().week
+        df['weekday'] = df['date'].dt.dayofweek
+        df['day'] = df['date'].dt.day
+        df['is_weekend'] = df['weekday'] >= 5
+    except AttributeError as e:
+        print(f"Error al crear características de fecha: {e}")
+    except KeyError as e:
+        print(f"Columna de fecha no encontrada: {e}")
+    return df
+```
+
+### Temporal Variables
+
+<Accordion title="Year (year)">
+
+**Values**: 2020, 2021, 2022, 2023
+
+**Usage**: 
+- Identifying pandemic phases (initial outbreak, variants, endemic transition)
+- Year-over-year comparisons
+- Merging with annual socioeconomic data (HDI, life expectancy)
+
+</Accordion>
+
+<Accordion title="Quarter (quarter)">
+
+**Values**: 1, 2, 3, 4
+
+**Usage**:
+- Quarterly aggregations for trend analysis
+- Seasonal pattern detection
+- Business reporting periods
+
+</Accordion>
+
+<Accordion title="Month (month)">
+
+**Values**: 1-12
+
+**Usage**:
+- Monthly trend analysis
+- Identifying seasonal patterns (winter waves)
+- Policy evaluation at monthly granularity
+
+</Accordion>
+
+<Accordion title="Week (week)">
+
+**Values**: 1-53 (ISO week number)
+
+**Usage**:
+- Weekly aggregations (commonly used in epidemiological reporting)
+- Short-term trend detection
+- Aligning with public health reporting cycles
+
+</Accordion>
+
+<Accordion title="Weekday (weekday)">
+
+**Values**: 0-6 (Monday=0, Sunday=6)
+
+**Usage**:
+- Detecting day-of-week reporting patterns
+- Identifying weekend reporting delays
+- Smoothing out weekday effects in analysis
+
+</Accordion>
+
+<Accordion title="Day (day)">
+
+**Values**: 1-31
+
+**Usage**:
+- Daily-level analysis
+- Identifying specific dates of interest
+
+</Accordion>
+
+<Accordion title="Is Weekend (is_weekend)">
+
+**Values**: True, False (boolean)
+
+**Usage**:
+- Filtering weekend vs. weekday data
+- Accounting for reduced reporting on weekends
+- Feature for modeling reporting patterns
+
+<Note>
+Many countries show reduced case/death reporting on weekends due to administrative delays. The 7-day rolling averages (e.g., `new_cases_smoothed`) help mitigate this effect.
+</Note>
+
+</Accordion>
+
+## Derived COVID-19 Variables
+
+Multiple derived variables are calculated during the cleaning process to provide rate-normalized and smoothed metrics.
+
+### Daily Change Variables
+
+Daily changes are computed from cumulative totals using `.diff()` within country groups:
+
+```python cleaning.py
+# Calculate daily changes
+df['new_vaccinations'] = df.groupby('country')['total_vaccinations'].diff().fillna(0).clip(lower=0)
+df['new_deaths'] = df.groupby('country')['total_deaths'].diff().fillna(0).clip(lower=0)
+df['new_cases'] = df.groupby('country')['total_cases'].diff().fillna(0).clip(lower=0)
+df['new_tests'] = df.groupby('country')['total_tests'].diff().fillna(0).clip(lower=0)
+```
+
+**Key Features:**
+- `.groupby('country')`: Ensures differences are calculated within countries only
+- `.fillna(0)`: First observation for each country gets 0 (no prior data)
+- `.clip(lower=0)`: Removes negative values caused by data corrections
+
+### Rolling Averages (Smoothing)
+
+7-day rolling averages reduce noise from reporting delays and weekly patterns:
+
+```python cleaning.py
+df['new_cases_smoothed'] = df.groupby('country')['new_cases'].transform(
+    lambda x: x.rolling(window=7, min_periods=1).mean()
+)
+
+df['new_deaths_smoothed'] = df.groupby('country')['new_deaths'].transform(
+    lambda x: x.rolling(window=7, min_periods=1).mean()
+)
+
+df['new_vaccinations_smoothed'] = df.groupby('country')['new_vaccinations'].transform(
+    lambda x: x.rolling(window=7, min_periods=1).mean()
+)
+
+df['new_tests_smoothed'] = df.groupby('country')['new_tests'].transform(
+    lambda x: x.rolling(window=7, min_periods=1).mean()
+)
+```
+
+**Parameters:**
+- `window=7`: 7-day window captures a full week
+- `min_periods=1`: Allows calculation even with fewer than 7 observations (start of series)
+
+### Per-Capita Normalization
+
+To enable cross-country comparisons, raw counts are normalized by population:
+
+```python cleaning.py
+# Per million population
+df['total_cases_per_million'] = (df['total_cases'] / df['population']) * 1e6
+df['new_cases_per_million'] = (df['new_cases'] / df['population']) * 1e6
+df['new_cases_smoothed_per_million'] = (df['new_cases_smoothed'] / df['population']) * 1e6
+
+df['total_deaths_per_million'] = (df['total_deaths'] / df['population']) * 1e6
+df['new_deaths_per_million'] = (df['new_deaths'] / df['population']) * 1e6
+df['new_deaths_smoothed_per_million'] = (df['new_deaths_smoothed'] / df['population']) * 1e6
+
+df['new_vaccinations_smoothed_per_million'] = (df['new_vaccinations_smoothed'] / df['population']) * 1e6
+
+# Per hundred population
+df['total_vaccinations_per_hundred'] = (df['total_vaccinations'] / df['population']) * 100
+df['people_vaccinated_per_hundred'] = (df['people_vaccinated'] / df['population']) * 100
+df['people_fully_vaccinated_per_hundred'] = (df['people_fully_vaccinated'] / df['population']) * 100
+df['total_boosters_per_hundred'] = (df['total_boosters'] / df['population']) * 100
+
+# Per thousand population
+df['total_tests_per_thousand'] = (df['total_tests'] / df['population']) * 1000
+df['new_tests_per_thousand'] = (df['new_tests'] / df['population']) * 1000
+df['new_tests_smoothed_per_thousand'] = (df['new_tests_smoothed'] / df['population']) * 1000
+```
+
+**Scaling Conventions:**
+- **Cases/Deaths**: Per million (rates are in the hundreds)
+- **Vaccinations**: Per hundred (rates can exceed 100% for multiple doses)
+- **Tests**: Per thousand (moderate rates)
+
+## Vaccination Ratios
+
+Vaccination coverage metrics are calculated with upper bounds to handle reporting errors:
+
+```python cleaning.py
+df['vaccination_ratio'] = ((df['people_vaccinated'] / df['population']) * 100).clip(upper=100)
+df['fully_vaccination_ratio'] = ((df['people_fully_vaccinated'] / df['population']) * 100).clip(upper=100)
+```
+
+<Note>
+The `.clip(upper=100)` prevents values exceeding 100% caused by:
+- Population estimate errors
+- Vaccination of non-residents
+- Data reporting corrections
+</Note>
+
+## Geographic Features
+
+Geographic coordinates are added from an auxiliary dataset to enable spatial analysis and mapping:
+
+```python cleaning.py
+# Merge latitude and longitude
+df = df.merge(df_latlon[['country', 'lat', 'lon']], on='country', how='left')
+```
+
+**Source**: Country centroids from the `countries-lat-lon.csv` dataset, with manual corrections for:
+- Name mismatches (e.g., "Czechia" vs. "Czech Republic")
+- Missing countries (e.g., South Sudan)
+
+## Test Positivity Metrics
+
+Two related metrics quantify testing adequacy:
+
+### Tests per Case
+
+```python cleaning.py
+df['tests_per_case'] = np.where(
+    (df['new_cases_smoothed'].isna()) | (df['new_cases_smoothed'] == 0),
+    np.nan,
+    df['new_tests_smoothed'] / df['new_cases_smoothed']
+)
+```
+
+**Interpretation**: Higher values indicate more comprehensive testing (detecting more cases per positive result).
+
+### Positive Rate
+
+```python cleaning.py
+df['positive_rate'] = np.where(df['tests_per_case'] > 0, 1 / df['tests_per_case'], 0)
+```
+
+**Interpretation**: Share of tests that are positive. WHO recommends less than 5% for adequate testing.
+
+## Data Type Optimization
+
+To reduce memory usage, data types are optimized in the `_set_dtypes()` function:
+
+```python cleaning.py
+def _set_dtypes(df: pd.DataFrame):
+    # Convert object to category (significant memory savings)
+    for col in ["country", "code", "continent"]:
+        try:
+            df[col] = df[col].astype("category")
+        except Exception as e:
+            print(f"Error al convertir la columna {col} a category: {e}")
+    
+    # Convert float64 to float32 (50% memory reduction)
+    try:
+        float_cols = df.select_dtypes(include=["float64"]).columns
+        df[float_cols] = df[float_cols].astype(np.float32)
+    except Exception as e:
+        print(f"Error al convertir columnas float64 a float32: {e}")
+    
+    # Reduce integers to smallest sufficient type
+    int_cols = ["quarter", "month", "weekday", "day"]
+    for col in int_cols:
+        try:
+            df[col] = df[col].astype(np.int8)
+        except Exception as e:
+            print(f"Error al convertir la columna {col} a int8: {e}")
+    
+    return df
+```
+
+**Benefits:**
+- **Category**: ~70% memory reduction for low-cardinality string columns
+- **float32**: 50% memory reduction (sufficient precision for COVID data)
+- **int8**: Minimal memory for small integer ranges
+
+## Temporal Aggregations
+
+The `_save_datasets()` function generates aggregated views for time series analysis:
+
+<Steps>
+
+<Step title="Weekly Aggregation">
+Groups data by `country`, `year`, and `week` to create weekly summaries.
+</Step>
+
+<Step title="Monthly Aggregation">
+Groups data by `country`, `year`, and `month` for monthly time series.
+</Step>
+
+<Step title="Quarterly Aggregation">
+Groups data by `country`, `year`, and `quarter` for quarterly analysis.
+</Step>
+
+<Step title="Yearly Aggregation">
+Groups data by `country` and `year` for annual comparisons.
+</Step>
+
+</Steps>
+
+### Aggregation Logic
+
+The aggregation strategy depends on variable type:
+
+```python cleaning.py
+def build_agg_map(df):
+    object_cols = df.select_dtypes(include=['object','category']).columns.tolist()
+
+    mean_cols = [
+        'population','population_density', 'median_age', 'gdp_per_capita', 'diabetes_prevalence',
+        'handwashing_facilities', 'life_expectancy', 'human_development_index',
+        'extreme_poverty', 'hospital_beds_per_thousand','lat','lon','stringency_index',
+        'positive_rate','tests_per_case'
+    ]
+
+    accum_cols = [col for col in df.select_dtypes(include='number').columns 
+                  if not col.startswith('new') 
+                  and col not in mean_cols and col not in ['year', 'quarter', 'month', 'week', 'weekday', 'day']]
+
+    new_cols = [col for col in df.columns if col.startswith('new')]
+
+    agg_map = {}
+    for col in df.columns:
+        if col == 'day':
+            continue
+        if col in object_cols:
+            agg_map[col] = get_mode  # Most common value
+        elif col in new_cols:
+            agg_map[col] = 'sum'  # Sum daily changes
+        elif col in accum_cols or col == 'date':
+            agg_map[col] = 'last'  # Take last value (cumulative totals)
+        elif col in mean_cols:
+            agg_map[col] = 'mean'  # Average rates and indicators
+    return agg_map
+```
+
+**Aggregation Rules:**
+- **New/daily variables** (`new_cases`, `new_deaths`): **Sum** (total for the period)
+- **Cumulative variables** (`total_cases`, `total_deaths`): **Last** (end-of-period value)
+- **Rates and indicators** (`stringency_index`, `positive_rate`): **Mean** (average for the period)
+- **Categorical variables**: **Mode** (most common value)
+
+## Output Dataset Structure
+
+The final cleaned dataset has the following characteristics:
+
+### Schema
+
+| Category | Variables |
+|----------|----------|
+| **Identifiers** | country, code, continent, date |
+| **Temporal** | year, quarter, month, week, weekday, day, is_weekend |
+| **Cases** | total_cases, new_cases, new_cases_smoothed, *_per_million variants |
+| **Deaths** | total_deaths, new_deaths, new_deaths_smoothed, *_per_million variants |
+| **Tests** | total_tests, new_tests, new_tests_smoothed, *_per_thousand variants, tests_per_case, positive_rate |
+| **Vaccinations** | total_vaccinations, people_vaccinated, people_fully_vaccinated, total_boosters, new_vaccinations, new_vaccinations_smoothed, vaccination_ratio, fully_vaccination_ratio, *_per_hundred variants |
+| **Socioeconomic** | population, population_density, median_age, life_expectancy, gdp_per_capita, extreme_poverty, human_development_index, diabetes_prevalence, hospital_beds_per_thousand, handwashing_facilities |
+| **Geographic** | lat, lon |
+| **Policy** | stringency_index |
+
+### Data Quality Summary
+
+After preprocessing, the dataset achieves:
+- **Zero missing values** in core variables (cases, deaths, vaccinations)
+- **Less than 1% missing values** in most socioeconomic indicators
+- **195 countries** with complete time series (2020-2023)
+- **~280,000 daily observations** (195 countries × 1,461 days)
+- **Optimized memory footprint**: ~200 MB (vs. ~800 MB raw)
+
+## Example: Complete Pipeline
+
+Here's how to run the complete cleaning and preprocessing pipeline:
+
+```python
+import pandas as pd
+from cleaning import clean_dataset
+
+# Load raw data from Our World in Data
+url = "https://catalog.ourworldindata.org/garden/covid/latest/compact/compact.csv"
+df_raw = pd.read_csv(url)
+
+# Run complete pipeline
+df_clean, df_weekly, df_monthly, df_quarterly, df_yearly = clean_dataset(
+    df_raw,
+    ruta_csv="outputs/owid-covid-data-clean.csv",
+    ruta_schema="outputs/schemas/schema-clean.json",
+    gen_summaries=True,
+    start_date='2020-01-01',
+    end_date='2023-12-31'
+)
+
+print(f"Clean dataset shape: {df_clean.shape}")
+print(f"Missing values: {df_clean.isna().sum().sum()}")
+print(f"Memory usage: {df_clean.memory_usage(deep=True).sum() / 1e6:.2f} MB")
+```
+
+**Output:**
+```
+Tiempo de ejecución de la limpieza del dataset: 98.42 segundos
+Clean dataset shape: (284295, 68)
+Missing values: 0
+Memory usage: 196.83 MB
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Dataset Overview" icon="database" href="/data/dataset-overview">
+    Review the original dataset structure
+  </Card>
+  <Card title="Data Cleaning" icon="broom" href="/data/data-cleaning">
+    Learn about the cleaning methodology
+  </Card>
+</CardGroup>

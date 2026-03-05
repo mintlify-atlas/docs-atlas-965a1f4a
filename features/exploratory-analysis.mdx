@@ -1,0 +1,246 @@
+---
+title: Exploratory Data Analysis
+description: Comprehensive COVID-19 exploratory analysis including global trends, continental evolution, and socioeconomic correlations
+---
+
+# Exploratory Data Analysis
+
+The Exploratory Data Analysis (EDA) module provides a comprehensive analysis of the global COVID-19 pandemic evolution using data from [Our World in Data](https://ourworldindata.org/coronavirus). This analysis helps understand the factors associated with virus incidence and mortality across different countries and continents.
+
+## Overview
+
+The EDA capabilities examine multiple dimensions of the pandemic:
+
+<CardGroup cols={2}>
+  <Card title="Global & Continental Trends" icon="globe">
+    Visualize the evolution of cases, deaths, tests, and vaccinations globally and by continent
+  </Card>
+  <Card title="Socioeconomic Correlations" icon="chart-line">
+    Study relationships between GDP per capita, median age, stringency index, and pandemic incidence
+  </Card>
+  <Card title="Vaccination Impact" icon="syringe">
+    Analyze the relationship between vaccination campaigns and mortality rates
+  </Card>
+  <Card title="Government Response" icon="landmark">
+    Examine the effectiveness of government restrictions using the stringency index
+  </Card>
+</CardGroup>
+
+## Key Variables Analyzed
+
+### Pandemic Metrics
+- **Cases**: Daily and cumulative cases (total and per million)
+- **Deaths**: Daily and cumulative deaths (total and per million) 
+- **Tests**: Testing capacity and positivity rates (per thousand)
+- **Vaccinations**: Total vaccinations and vaccination ratio
+
+### Socioeconomic Factors
+- **GDP per capita**: Economic development indicator
+- **Median age**: Population age distribution
+- **Stringency index**: Government response measures (0-100 scale)
+- **Life expectancy**: Health system quality indicator
+
+## Data Aggregation Levels
+
+The analysis supports multiple temporal aggregations:
+
+- **Daily**: 278,991 records across 191 countries (2020-01-01 to 2023-12-31)
+- **Weekly**: 40,110 records for trend analysis
+- **Monthly**: 9,168 records for medium-term patterns
+- **Quarterly**: 3,056 records for seasonal analysis
+- **Yearly**: 764 records for long-term trends
+
+## Interactive Visualizations
+
+### Global Evolution Dashboard
+
+The Streamlit app provides interactive visualizations including:
+
+<Accordion title="Vaccination vs Mortality Analysis">
+  ```python
+  # From covid_app/eda.py:235-309
+  def mostrar_graficaVacunacionesVsMuertesCasos(df, continente, pais="Todos"):
+      df_vcm = df.groupby('date')[[
+          'total_vaccinations', 
+          'new_deaths_smoothed', 
+          'new_cases_smoothed'
+      ]].sum().reset_index()
+      
+      # Create subplot with dual y-axes
+      fig = make_subplots(
+          rows=2, cols=1,
+          shared_xaxes=True,
+          vertical_spacing=0.15,
+          specs=[[{"secondary_y": True}], [{"secondary_y": True}]]
+      )
+      
+      # Add deaths and vaccinations on first subplot
+      fig.add_trace(go.Scatter(
+          x=df_vcm['date'],
+          y=df_vcm['new_deaths_smoothed'],
+          mode='lines',
+          name='Muertes Diarias',
+          line=dict(color='firebrick', width=2, shape='spline'),
+          fill='tozeroy'
+      ), row=1, col=1, secondary_y=False)
+  ```
+  
+  This visualization reveals the inverse relationship between vaccination campaigns and mortality rates.
+</Accordion>
+
+<Accordion title="Continental Comparison">
+  ```python
+  # From covid_app/eda.py:156-234
+  def mostrar_graficaComparativa(last_df):     
+      continent_avg = last_df.groupby('continent', observed=True)[[
+          'total_cases_per_million', 
+          'total_deaths_per_million', 
+          'total_tests_per_thousand',
+          'vaccination_ratio'
+      ]].mean().reset_index()
+
+      # Normalize each column to max for visual comparison
+      cols = ['total_cases_per_million', 'total_deaths_per_million',
+              'total_tests_per_thousand', 'vaccination_ratio']
+      continent_avg_norm = continent_avg.copy()
+      for col in cols:
+          continent_avg_norm[col] = continent_avg_norm[col] / continent_avg_norm[col].max()
+  ```
+  
+  Normalized values allow direct comparison across continents with different scales.
+</Accordion>
+
+### Scatter Plot Analysis
+
+The EDA includes three key scatter plots examining socioeconomic influences:
+
+<Steps>
+  <Step title="Tests vs Cases (GDP influence)">
+    Bubble size represents GDP per capita, showing how economic development affects testing capacity
+    
+    ```python
+    # From covid_app/eda.py:411-428
+    fig.add_trace(go.Scatter(
+        x=temp['total_cases_per_million'],
+        y=temp['total_tests_per_thousand'],
+        mode='markers',
+        marker=dict(
+            size=temp['gdp_per_capita'],
+            sizemode='area',
+            sizeref=sizeref_gdp,
+            color=continent_colors[cont]
+        )
+    ), row=1, col=1)
+    ```
+  </Step>
+  
+  <Step title="GDP vs Vaccination Coverage">
+    Demonstrates correlation between economic development and vaccination rates
+  </Step>
+  
+  <Step title="Cases vs Deaths (Age influence)">
+    Bubble size represents median age, revealing how population age affects mortality
+    
+    ```python
+    # Age scaling for bubble size
+    df3["median_age_scaled"] = df3["median_age"] ** 2
+    ```
+  </Step>
+</Steps>
+
+## Stringency Index Analysis
+
+The stringency index (0-100) measures government response strictness:
+
+<Note>
+  Higher stringency values indicate stricter lockdowns, travel restrictions, and social distancing measures.
+</Note>
+
+### LOWESS Curve Analysis
+
+```python
+# From covid_app/eda.py:611-765
+def curvas_lowess(df, continente, pais="Todos"):
+    lag_list = [0, 15, 30, 40, 60, 80]  # Days lag between measures and effects
+    
+    for lag in lag_list:
+        df_plot = df_cases.copy()
+        df_plot['casos_lag'] = df_plot['casos_diarios'].shift(-lag)
+        
+        # Apply LOWESS smoothing
+        smoothed = sm.nonparametric.lowess(
+            df_plot['casos_lag'], 
+            df_plot['indice_rigurosidad'], 
+            frac=0.3
+        )
+```
+
+This interactive visualization allows examining the delayed effect of government measures on cases and deaths with different time lags (0, 15, 30, 40, 60, 80 days).
+
+## Country Distribution by Continent
+
+<Tip>
+  The dataset covers 191 countries:
+  - Africa: 53 countries (2.07 billion population)
+  - Asia: 44 countries (6.83 billion population)
+  - Europe: 45 countries (1.09 billion population)
+  - North America: 23 countries (876 million population)
+  - Oceania: 14 countries (64.6 million population)
+  - South America: 12 countries (628 million population)
+</Tip>
+
+## Key Findings
+
+Based on the EDA visualizations:
+
+1. **Asia** has the largest population but not proportionally higher case rates
+2. **Economic development** (GDP per capita) strongly correlates with testing capacity
+3. **Vaccination campaigns** show clear inverse relationship with mortality
+4. **Government restrictions** show delayed effects (15-60 days) on transmission
+5. **Median age** significantly influences mortality rates
+
+## Using the EDA Module
+
+Access the interactive EDA dashboard through the Streamlit app:
+
+<Card title="Live Application" icon="external-link" href="https://covid19-data-analytics-owid-xasv8wrmsgkmtautyfywth.streamlit.app/">
+  Explore the full interactive analysis with filters and real-time visualizations
+</Card>
+
+### Filters Available
+
+- **Continent filter**: Focus on specific continental trends
+- **Country filter**: Drill down to individual country analysis  
+- **Indicator selection**: Choose between Cases, Deaths, Tests, or Vaccinations
+- **KPI mode**: Toggle between absolute totals and normalized per capita values
+
+## Data Quality Notes
+
+<Warning>
+  Datasets are compressed (.zip) in the GitHub repository due to size limitations. Decompress files before running notebooks locally and update file paths accordingly.
+</Warning>
+
+The data has been cleaned and preprocessed with:
+- Missing value imputation
+- Smoothed daily values (7-day rolling average)
+- Per capita normalization
+- Categorical encoding for continents
+
+## Technologies Used
+
+- **Pandas** & **NumPy**: Data manipulation
+- **Plotly**: Interactive visualizations
+- **Statsmodels**: LOWESS smoothing for trend analysis
+- **Streamlit**: Interactive web application
+- **Folium**: Geographic map visualizations
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Clustering Analysis" icon="diagram-3" href="/features/clustering">
+    Group countries by similar pandemic patterns
+  </Card>
+  <Card title="Predictive Modeling" icon="chart-line" href="/features/predictive-modeling">
+    Forecast mortality trends using SARIMAX
+  </Card>
+</CardGroup>

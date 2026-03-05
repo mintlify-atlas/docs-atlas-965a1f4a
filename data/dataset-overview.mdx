@@ -1,0 +1,197 @@
+---
+title: Dataset Overview
+description: Comprehensive overview of the Our World in Data COVID-19 dataset used in this project
+---
+
+This project analyzes the global evolution of the COVID-19 pandemic using open data from [Our World in Data](https://ourworldindata.org/coronavirus). The dataset provides comprehensive COVID-19 statistics combined with socioeconomic indicators for countries worldwide.
+
+## Data Source
+
+The dataset is sourced from the Our World in Data COVID-19 repository, which aggregates data from multiple authoritative sources including:
+- Johns Hopkins University
+- World Health Organization (WHO)
+- National government health departments
+- Testing and vaccination data from official sources
+
+The dataset is regularly updated and can be accessed at:
+```
+https://catalog.ourworldindata.org/garden/covid/latest/compact/compact.csv
+```
+
+<Note>
+Datasets included in this repository are **compressed** (`.zip` format) due to GitHub storage limitations. Before executing notebooks or scripts (except the Streamlit app), you should **decompress the files** in the corresponding folder while maintaining the directory structure.
+</Note>
+
+## Time Period Covered
+
+The analysis focuses on data from **January 1, 2020** to **December 31, 2023**, covering the critical years of the pandemic including:
+- Initial outbreak and first wave (2020)
+- Multiple variant waves (2021-2022)
+- Vaccination rollout period (2021-2023)
+- Post-pandemic transition (2023)
+
+## Geographic Coverage
+
+The dataset includes **195 sovereign countries** across all continents:
+- **Asia**: 49 countries
+- **Africa**: 54 countries  
+- **Europe**: 44 countries
+- **Americas**: 35 countries (North and South America)
+- **Oceania**: 13 countries
+
+Non-sovereign territories and regional aggregates are excluded from the analysis to ensure consistency.
+
+## Variables Included
+
+The dataset contains over 60 variables organized into the following categories:
+
+### COVID-19 Cases and Deaths
+
+<Accordion title="Cases and Deaths Variables">
+
+| Variable | Description |
+|----------|-------------|
+| `total_cases` | Cumulative confirmed COVID-19 cases |
+| `new_cases` | Daily new confirmed cases |
+| `new_cases_smoothed` | 7-day rolling average of new cases |
+| `total_cases_per_million` | Cumulative cases per million population |
+| `new_cases_per_million` | Daily new cases per million population |
+| `new_cases_smoothed_per_million` | Smoothed new cases per million |
+| `total_deaths` | Cumulative confirmed COVID-19 deaths |
+| `new_deaths` | Daily new confirmed deaths |
+| `new_deaths_smoothed` | 7-day rolling average of new deaths |
+| `total_deaths_per_million` | Cumulative deaths per million population |
+| `new_deaths_per_million` | Daily new deaths per million population |
+| `new_deaths_smoothed_per_million` | Smoothed new deaths per million |
+
+</Accordion>
+
+### Testing Data
+
+<Accordion title="Testing Variables">
+
+| Variable | Description |
+|----------|-------------|
+| `total_tests` | Cumulative COVID-19 tests conducted |
+| `new_tests` | Daily new tests conducted |
+| `total_tests_per_thousand` | Cumulative tests per thousand population |
+| `new_tests_per_thousand` | Daily new tests per thousand population |
+| `new_tests_smoothed` | 7-day rolling average of new tests |
+| `new_tests_smoothed_per_thousand` | Smoothed new tests per thousand |
+| `tests_per_case` | Ratio of tests to confirmed cases |
+| `positive_rate` | Share of positive tests (inverse of tests per case) |
+
+</Accordion>
+
+### Vaccination Data
+
+<Accordion title="Vaccination Variables">
+
+| Variable | Description |
+|----------|-------------|
+| `total_vaccinations` | Cumulative vaccine doses administered |
+| `people_vaccinated` | Number of people with at least one dose |
+| `people_fully_vaccinated` | Number of fully vaccinated people |
+| `total_boosters` | Number of booster doses administered |
+| `new_vaccinations` | Daily new vaccinations |
+| `new_vaccinations_smoothed` | 7-day rolling average of new vaccinations |
+| `total_vaccinations_per_hundred` | Vaccination doses per 100 population |
+| `people_vaccinated_per_hundred` | Share of population with at least one dose |
+| `people_fully_vaccinated_per_hundred` | Share of fully vaccinated population |
+| `total_boosters_per_hundred` | Booster doses per 100 population |
+| `vaccination_ratio` | Percentage of population vaccinated (capped at 100%) |
+| `fully_vaccination_ratio` | Percentage fully vaccinated (capped at 100%) |
+
+</Accordion>
+
+### Socioeconomic Indicators
+
+<Accordion title="Socioeconomic Variables">
+
+| Variable | Description |
+|----------|-------------|
+| `population` | Total population |
+| `population_density` | Population per square kilometer |
+| `median_age` | Median age of the population |
+| `life_expectancy` | Life expectancy at birth (years) |
+| `gdp_per_capita` | GDP per capita (PPP, international $) |
+| `extreme_poverty` | Share of population in extreme poverty (%) |
+| `human_development_index` | UN Human Development Index (0-1) |
+| `diabetes_prevalence` | Diabetes prevalence in adult population (%) |
+| `hospital_beds_per_thousand` | Hospital beds per thousand population |
+| `handwashing_facilities` | Share of population with basic handwashing facilities (%) |
+
+</Accordion>
+
+### Policy Measures
+
+<Accordion title="Policy Variables">
+
+| Variable | Description |
+|----------|-------------|
+| `stringency_index` | Government response stringency index (0-100) |
+| `reproduction_rate` | Real-time estimate of effective reproduction rate (R) |
+
+</Accordion>
+
+### Geographic Information
+
+<Accordion title="Geographic Variables">
+
+| Variable | Description |
+|----------|-------------|
+| `country` | Country name |
+| `code` | ISO 3166-1 alpha-3 country code |
+| `continent` | Continent name |
+| `lat` | Latitude of country centroid |
+| `lon` | Longitude of country centroid |
+
+</Accordion>
+
+## Data Structure
+
+The dataset is structured as a **panel/longitudinal dataset** with:
+- **Daily observations** for each country
+- **Time series format**: Each row represents one country on one date
+- **Primary keys**: `country` and `date`
+- **Format**: CSV (Comma-Separated Values)
+
+### Example Structure
+
+```python
+# Sample rows from the dataset
+df.head()
+```
+
+| country | date | total_cases | new_deaths | stringency_index | gdp_per_capita |
+|---------|------|-------------|------------|------------------|----------------|
+| Afghanistan | 2020-01-01 | 0.0 | 0.0 | 0.0 | 1516.27 |
+| Afghanistan | 2020-01-02 | 0.0 | 0.0 | 0.0 | 1516.27 |
+| Albania | 2020-01-01 | 0.0 | 0.0 | 0.0 | 13417.86 |
+
+## Data Quality Considerations
+
+<Note>
+The raw dataset contains significant missing values, particularly for:
+- **Hospital and ICU admission data**: Limited reporting in many countries
+- **Testing data**: Inconsistent reporting, especially in early 2020
+- **Vaccination data**: Only available from late 2020 onwards
+- **Socioeconomic indicators**: Some countries have incomplete data
+
+These issues are addressed in the [data cleaning](/data/data-cleaning) and [preprocessing](/data/preprocessing) pipelines.
+</Note>
+
+## Data Updates
+
+The Our World in Data repository is updated regularly, but this analysis uses a snapshot covering 2020-2023. For the most current data, visit the [Our World in Data COVID-19 page](https://ourworldindata.org/coronavirus).
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Data Cleaning" icon="broom" href="/data/data-cleaning">
+    Learn about the data cleaning pipeline and quality checks
+  </Card>
+  <Card title="Preprocessing" icon="gears" href="/data/preprocessing">
+    Explore feature engineering and data transformations
+  </Card>
+</CardGroup>

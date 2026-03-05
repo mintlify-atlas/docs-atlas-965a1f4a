@@ -1,0 +1,303 @@
+---
+title: 'EDA Workflow'
+description: 'Complete exploratory data analysis process for COVID-19 data'
+---
+
+# Exploratory Data Analysis Workflow
+
+This guide provides a step-by-step walkthrough of the exploratory data analysis (EDA) process used in the COVID-19 Data Analytics project. The EDA workflow helps understand data patterns, distributions, and relationships before modeling.
+
+## Overview
+
+The EDA process analyzes the preprocessed COVID-19 dataset to understand:
+- How cases and deaths have progressed over time
+- Factors influencing pandemic evolution (socioeconomic characteristics, government measures, vaccination campaigns)
+- Distribution patterns across countries and continents
+
+<Steps>
+
+### Load Libraries and Data
+
+First, import necessary libraries for data manipulation, visualization, and feature extraction:
+
+```python
+# Data manipulation
+import pandas as pd
+import numpy as np
+
+# Visualizations
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+# Feature extraction
+import tsfresh
+from tsfresh.feature_extraction.settings import ComprehensiveFCParameters
+from tsfresh.utilities.dataframe_functions import impute
+
+# Auxiliary functions
+import aux_functions as aux
+import cleaning as clean
+
+# Visualization configuration
+plt.style.use('ggplot')
+sns.set(style='whitegrid')
+plt.rcParams['figure.figsize'] = (12, 8)
+```
+
+### Load Cleaned Datasets
+
+Load the preprocessed datasets at different temporal granularities:
+
+```python
+datasets_info = {
+    "df": "clean",
+    "df_weekly": "clean-weekly",
+    "df_monthly": "clean-monthly",
+    "df_quarterly": "clean-quarterly",
+    "df_yearly": "clean-yearly"
+}
+
+# Load all datasets
+datasets = {}
+for var_name, suffix in datasets_info.items():
+    datasets[var_name] = aux.load_dataset_fromcsv(
+        f"owid-covid-data-{suffix}.csv",
+        f"schema-{suffix}.json"
+    )
+
+df = datasets['df']
+df_weekly = datasets['df_weekly']
+df_monthly = datasets['df_monthly']
+df_quarterly = datasets['df_quarterly']
+df_yearly = datasets['df_yearly']
+```
+
+### Dataset Overview
+
+Examine the structure and scope of your datasets:
+
+```python
+for name, dataframe in zip(
+    ["Daily", "Weekly", "Monthly", "Quarterly", "Yearly"],
+    [df, df_weekly, df_monthly, df_quarterly, df_yearly]
+):
+    print(f"📊 {name} Summary")
+    print(f"Columns: {dataframe.shape[1]}")
+    print(f"Records: {dataframe.shape[0]}")
+    print(f"Countries: {dataframe.code.nunique()}")
+    print(f"Date Range: {dataframe.date.min().date()} → {dataframe.date.max().date()}")
+    print("-" * 40)
+```
+
+**Output:**
+```
+📊 Daily Summary
+Columns: 60
+Records: 278991
+Countries: 191
+Date Range: 2020-01-01 → 2023-12-31
+```
+
+### Analyze Distribution by Continent
+
+Visualize countries and population distribution across continents:
+
+```python
+continent_counts = df.groupby("continent", observed=False)['country'].nunique().reset_index()
+continent_counts.columns = ['continent', 'num_countries']
+continent_counts['population'] = df.groupby("continent", observed=False)['population'].sum().values
+
+fig = go.Figure()
+
+# Bar chart: number of countries
+fig.add_trace(go.Bar(
+    x=continent_counts["continent"],
+    y=continent_counts["num_countries"],
+    name="Number of Countries",
+    marker=dict(color="steelblue"),
+    opacity=0.85,
+    yaxis="y1"
+))
+
+# Line chart: total population
+fig.add_trace(go.Scatter(
+    x=continent_counts["continent"],
+    y=continent_counts["population"],
+    name="Total Population",
+    mode="lines+markers",
+    marker=dict(color="#ff7f0e", size=10),
+    line=dict(color="#ff7f0e", width=3),
+    yaxis="y2"
+))
+
+fig.update_layout(
+    title="Countries and Population by Continent",
+    xaxis=dict(title=None),
+    yaxis=dict(title="Number of Countries"),
+    yaxis2=dict(
+        title="Total Population",
+        overlaying="y",
+        side="right"
+    )
+)
+
+fig.show()
+```
+
+<Tip>
+Africa has the most countries (53), but Asia has the largest total population, tripling Africa's and quadrupling Europe's population.
+</Tip>
+
+### Population Distribution Analysis
+
+Analyze population distribution across countries using box plots:
+
+```python
+# Get population data by continent
+df_population = df.groupby(['continent', 'country'])['population'].first().reset_index()
+
+fig = px.box(
+    df_population,
+    x='continent',
+    y='population',
+    color='continent',
+    hover_data=['country'],
+    points='all',
+    title='Population Distribution by Continent'
+)
+
+fig.update_traces(
+    jitter=0.5,
+    pointpos=0,
+    marker=dict(size=6, opacity=0.8)
+)
+
+fig.update_layout(
+    showlegend=False,
+    template="plotly_white"
+)
+
+fig.show()
+```
+
+### Correlation Analysis
+
+Examine relationships between key variables:
+
+```python
+# Select numeric columns for correlation analysis
+numeric_cols = [
+    'new_cases_per_million',
+    'new_deaths_per_million',
+    'stringency_index',
+    'vaccination_ratio',
+    'gdp_per_capita',
+    'median_age',
+    'life_expectancy'
+]
+
+# Calculate correlation matrix
+corr_matrix = df[numeric_cols].corr()
+
+# Create heatmap
+plt.figure(figsize=(10, 8))
+sns.heatmap(
+    corr_matrix,
+    annot=True,
+    fmt='.2f',
+    cmap='coolwarm',
+    center=0,
+    square=True,
+    linewidths=1
+)
+plt.title('Correlation Matrix: Key COVID-19 Variables')
+plt.tight_layout()
+plt.show()
+```
+
+### Time Series Visualization
+
+Visualize trends over time for specific countries:
+
+```python
+def plot_country_timeseries(df, country, metric):
+    """
+    Plot time series for a specific country and metric
+    """
+    df_country = df[df['country'] == country].copy()
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df_country['date'],
+        y=df_country[metric],
+        mode='lines',
+        name=metric
+    ))
+    
+    fig.update_layout(
+        title=f"{metric.replace('_', ' ').title()} - {country}",
+        xaxis_title="Date",
+        yaxis_title=metric.replace('_', ' ').title(),
+        template="plotly_white"
+    )
+    
+    fig.show()
+
+# Example: Plot new cases for Spain
+plot_country_timeseries(df, 'Spain', 'new_cases_smoothed_per_million')
+```
+
+### Feature Extraction with TSFresh
+
+Extract time series features for advanced analysis:
+
+```python
+from tsfresh import extract_features
+from tsfresh.utilities.dataframe_functions import impute
+
+# Prepare data for TSFresh
+ts_data = df[['country', 'date', 'new_deaths_smoothed_per_million']].copy()
+ts_data['id'] = ts_data['country']
+ts_data['time'] = ts_data.groupby('country').cumcount()
+
+# Extract features
+extracted_features = extract_features(
+    ts_data,
+    column_id='id',
+    column_sort='time',
+    column_value='new_deaths_smoothed_per_million',
+    impute_function=impute,
+    show_warnings=False
+)
+
+print(f"Extracted {extracted_features.shape[1]} features")
+```
+
+<Warning>
+Feature extraction can be computationally intensive for large datasets. Consider using a subset of data for initial exploration.
+</Warning>
+
+</Steps>
+
+## Key Insights
+
+After completing the EDA workflow, you should be able to:
+
+- **Understand data quality**: Identify missing values, outliers, and data inconsistencies
+- **Recognize patterns**: Discover temporal trends and geographic variations
+- **Identify relationships**: Find correlations between socioeconomic factors and pandemic outcomes
+- **Prepare for modeling**: Select relevant features and understand data distributions
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Clustering Analysis" icon="layer-group" href="/guides/clustering-analysis">
+    Group countries with similar pandemic patterns
+  </Card>
+  <Card title="Time Series Forecasting" icon="chart-line" href="/guides/time-series-forecasting">
+    Build predictive models for COVID-19 trends
+  </Card>
+</CardGroup>

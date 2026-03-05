@@ -1,0 +1,376 @@
+---
+title: 'clustering'
+description: 'Interactive clustering visualization application for COVID-19 country groupings'
+icon: 'circle-nodes'
+---
+
+## Overview
+
+The `clustering` module (located in `covid_app/clustering.py`) provides an interactive Streamlit application for exploring country clustering based on COVID-19 data. It visualizes how countries group together based on socioeconomic characteristics and temporal evolution patterns of cases and deaths.
+
+## Import
+
+```python
+from covid_app import clustering
+```
+
+---
+
+## Main Function
+
+### main()
+
+Launches the interactive clustering visualization Streamlit application.
+
+```python
+clustering.main()
+```
+
+**Parameters:** None (reads from `st.session_state`)
+
+**Returns:** None (renders Streamlit UI)
+
+<Note>
+**Prerequisites:**
+- Datasets must be loaded in `st.session_state.datasets`
+- Cluster assignments must be available in `covid_app/datasets/outputs/cluster-countries.csv`
+
+The application automatically:
+1. Validates session state data
+2. Loads cluster assignments
+3. Merges clustering data with COVID-19 metrics
+4. Renders interactive filters and visualizations
+</Note>
+
+#### Example
+
+```python
+import streamlit as st
+from covid_app import clustering
+
+# Run as Streamlit app
+if __name__ == "__main__":
+    clustering.main()
+```
+
+---
+
+## Clustering Methods
+
+The application supports three clustering approaches:
+
+### 1. Socioeconomic Factors (kmeans3)
+
+Groups countries by socioeconomic characteristics using K-means (k=3).
+
+**Features Used:**
+- GDP per capita
+- Life expectancy  
+- Human Development Index
+- Hospital beds per thousand
+- Population density
+- Total cases and deaths per million
+
+**Typical Clusters:**
+- **Cluster 1**: African countries with lower incidence and mortality
+- **Cluster 2**: Countries with good socioeconomic conditions, low COVID impact
+- **Cluster 3**: Highly developed countries with high case and death rates
+
+### 2. Daily Cases Evolution (caseskshape4)
+
+Groups countries by the temporal shape of daily case curves using K-Shape algorithm (k=4).
+
+**Typical Clusters:**
+- **Cluster 1**: Very few daily cases with one large wave
+- **Cluster 2**: One major wave with minor peaks
+- **Cluster 3**: Multiple moderate peaks with one dominant wave
+- **Cluster 4**: Multiple large waves throughout the pandemic
+
+### 3. Daily Deaths Evolution (deathskshape3)
+
+Groups countries by the temporal shape of daily death curves using K-Shape algorithm (k=3).
+
+**Typical Clusters:**
+- **Cluster 1**: One considerable death wave followed by smaller peaks
+- **Cluster 2**: Multiple death waves of similar magnitude
+- **Cluster 3**: Single death wave of moderate size
+
+---
+
+## Visualization Functions
+
+### show_header()
+
+Displays the introductory text explaining the clustering analysis approach.
+
+```python
+clustering.show_header()
+```
+
+**Returns:** None (renders HTML markdown)
+
+---
+
+### muestra_texto_cluster()
+
+Displays descriptive text for a specific cluster.
+
+```python
+clustering.muestra_texto_cluster(tip_mcluster, cluster_num)
+```
+
+<ParamField path="tip_mcluster" type="str" required>
+  Clustering method identifier: `'kmeans3'`, `'caseskshape4'`, or `'deathskshape3'`
+</ParamField>
+
+<ParamField path="cluster_num" type="int" required>
+  Cluster number (1-based indexing)
+</ParamField>
+
+**Returns:** None (renders markdown description)
+
+#### Example
+
+```python
+# Show description for cluster 2 of socioeconomic grouping
+clustering.muestra_texto_cluster('kmeans3', 2)
+```
+
+---
+
+### muestra_grafica_clusterkmeans3()
+
+Creates an interactive scatter plot showing the relationship between total cases and deaths per million, colored by cluster.
+
+```python
+clustering.muestra_grafica_clusterkmeans3(latest_df, tip_mcluster)
+```
+
+<ParamField path="latest_df" type="pd.DataFrame" required>
+  DataFrame with latest date values per country, including cluster assignments
+</ParamField>
+
+<ParamField path="tip_mcluster" type="str" required>
+  Clustering column name (e.g., `'kmeans3'`)
+</ParamField>
+
+**Returns:** None (renders Plotly chart)
+
+**Chart Features:**
+- X-axis: Total cases per million
+- Y-axis: Total deaths per million
+- Colors: Cluster assignments (blue, green, orange)
+- Hover: Country name
+
+#### Example
+
+```python
+latest_df = df.sort_values('date').groupby('country').tail(1)
+clustering.muestra_grafica_clusterkmeans3(latest_df, 'kmeans3')
+```
+
+---
+
+### muestra_grafica_pais()
+
+Plots the temporal evolution of cases or deaths for a specific country.
+
+```python
+clustering.muestra_grafica_pais(df, tip_mcluster, colores_dict, pais)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  COVID-19 time series data for the country
+</ParamField>
+
+<ParamField path="tip_mcluster" type="str" required>
+  Clustering method: `'caseskshape4'` (shows cases) or `'deathskshape3'` (shows deaths)
+</ParamField>
+
+<ParamField path="colores_dict" type="dict" required>
+  Dictionary mapping indicator columns to colors (e.g., `{'new_cases_smoothed': 'cornflowerblue'}`)
+</ParamField>
+
+<ParamField path="pais" type="str" required>
+  Country name (in Spanish)
+</ParamField>
+
+**Returns:** None (renders Plotly line chart with area fill)
+
+#### Example
+
+```python
+colores = {
+    'new_cases_smoothed': 'cornflowerblue',
+    'new_deaths_smoothed': 'indianred'
+}
+
+df_spain = df[df['country'] == 'Spain']
+clustering.muestra_grafica_pais(df_spain, 'caseskshape4', colores, 'España')
+```
+
+---
+
+### plot_indicator()
+
+Plots aggregated time series for a selected indicator (generic version of `muestra_grafica_pais`).
+
+```python
+clustering.plot_indicator(df, indicador, indicador_col, color, pais)
+```
+
+<ParamField path="df" type="pd.DataFrame" required>
+  Time series DataFrame
+</ParamField>
+
+<ParamField path="indicador" type="str" required>
+  Human-readable indicator name (e.g., "Casos diarios")
+</ParamField>
+
+<ParamField path="indicador_col" type="str" required>
+  Column name in DataFrame (e.g., `'new_cases_smoothed'`)
+</ParamField>
+
+<ParamField path="color" type="str" required>
+  Line color (CSS color name or hex)
+</ParamField>
+
+<ParamField path="pais" type="str" required>
+  Country name for title and hover
+</ParamField>
+
+**Returns:** None (renders Plotly chart)
+
+---
+
+## Interactive Features
+
+The Streamlit application provides:
+
+### Filters
+
+1. **Clustering Criterion Selector**
+   - Socioeconomic factors
+   - Daily cases evolution
+   - Daily deaths evolution
+
+2. **Cluster Selector** (radio buttons)
+   - Dynamically adjusts based on selected clustering method
+
+3. **Country Selector** (dropdown)
+   - Filtered by selected cluster
+   - Translated to Spanish
+
+### Visualizations
+
+1. **Cluster Description**: Text explanation of cluster characteristics
+
+2. **Scatter Plot** (socioeconomic only): Cases vs Deaths by cluster
+
+3. **Time Series Chart**: Evolution of cases or deaths for selected country
+
+4. **World Map** (socioeconomic only): Geographic distribution of clusters with color coding
+
+---
+
+## Data Requirements
+
+### Session State
+
+Required in `st.session_state`:
+
+```python
+{
+    "datasets": (df, df_weekly, df_monthly, df_quarterly, df_yearly),
+    "last_df": DataFrame,  # Latest date per country
+    "countries_clustered": DataFrame,  # Cluster assignments
+    "df_clustered": DataFrame,  # Full data + clusters
+    "last_df_clustered": DataFrame  # Latest + clusters
+}
+```
+
+### Cluster File Format
+
+File: `covid_app/datasets/outputs/cluster-countries.csv`
+
+```csv
+country,cluster_kmeans3,cluster_caseskshape4,cluster_deathskshape3
+Afghanistan,1,2,1
+Albania,2,3,2
+...
+```
+
+---
+
+## Usage Example
+
+<CodeGroup>
+```python Run Streamlit App
+# In terminal
+streamlit run covid_app/clustering.py
+```
+
+```python Integrate in Multi-Page App
+# pages/3_Clustering.py
+import streamlit as st
+from covid_app.clustering import main
+
+st.set_page_config(page_title="Clustering Analysis", layout="wide")
+
+if __name__ == "__main__":
+    main()
+```
+
+```python Load Required Data
+import pandas as pd
+import streamlit as st
+from covid_app import clustering
+
+# Load datasets
+df = pd.read_csv('outputs/owid-covid-data-clean.csv')
+clusters = pd.read_csv('covid_app/datasets/outputs/cluster-countries.csv')
+
+# Initialize session state
+st.session_state.datasets = (df, None, None, None, None)
+
+# Run clustering app
+clustering.main()
+```
+</CodeGroup>
+
+---
+
+## Color Schemes
+
+### Cluster Colors (K-means)
+```python
+CLUSTER_COLORS = {
+    "1": "blue",      # Low development, low impact
+    "2": "green",     # Good conditions, moderate impact  
+    "3": "orange"     # High development, high impact
+}
+```
+
+### Indicator Colors
+```python
+INDICATOR_COLORS = {
+    "new_cases_smoothed": "cornflowerblue",
+    "new_deaths_smoothed": "indianred"
+}
+```
+
+---
+
+## Dependencies
+
+Required packages:
+- `streamlit` - Web application framework
+- `pandas` - Data manipulation
+- `numpy` - Numerical operations
+- `plotly` - Interactive visualizations
+- `matplotlib` - Color handling
+
+Constant definitions:
+- `CONTINENTS_SPANISH` - Continent name translations
+- `PAISES_SPANISH` - Country name translations
+- `CONTINENT_COLORS` - Color mapping for continents

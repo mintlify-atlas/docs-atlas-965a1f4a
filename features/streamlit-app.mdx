@@ -1,0 +1,529 @@
+---
+title: Streamlit Interactive App
+description: Explore COVID-19 data through an interactive web application with real-time visualizations, filters, and insights
+---
+
+# Streamlit Interactive Application
+
+The project includes a fully functional **Streamlit web application** that provides an interactive interface to explore the COVID-19 data analysis results. Access the live application or run it locally for customized analysis.
+
+<Card title="Live Application" icon="external-link" href="https://covid19-data-analytics-owid-xasv8wrmsgkmtautyfywth.streamlit.app/">
+  **Access the deployed app instantly** - No installation required!
+</Card>
+
+## Application Structure
+
+The app is organized into three main sections:
+
+<CardGroup cols={3}>
+  <Card title="Inicio" icon="house">
+    **Home Page**  
+    Introduction and dataset loading
+  </Card>
+  <Card title="Análisis Exploratorio" icon="chart-bar">
+    **Exploratory Analysis**  
+    Interactive EDA with filters and visualizations
+  </Card>
+  <Card title="Clustering" icon="diagram-3">
+    **Clustering Analysis**  
+    Explore country groupings by patterns
+  </Card>
+</CardGroup>
+
+### Navigation
+
+The app uses a **horizontal navigation menu** at the top:
+
+```python
+# From covid_app/app.py:20-34
+from streamlit_option_menu import option_menu
+
+selected = option_menu(
+    menu_title=None, 
+    options=["Inicio", "Análisis Exploratorio", "Clustering"],
+    icons=["house", "bar-chart", "diagram-3"],
+    menu_icon="cast",
+    default_index=0,
+    orientation="horizontal",
+    styles={
+        "container": {"padding": "0!important", "background-color": "#f8f9fa86"},
+        "nav-link-selected": {"background-color": "#4CAF50", "color": "black"},
+    }
+)
+```
+
+## Section 1: Inicio (Home)
+
+### Purpose
+Loads and initializes the COVID-19 datasets for analysis.
+
+```python
+# From covid_app/app.py:38-40
+if selected == "Inicio":
+    from inicio import main as inicio_main
+    inicio_main()
+```
+
+**Features**:
+- Dataset loading from compressed files
+- Data schema validation
+- Session state initialization
+- Project description and methodology overview
+
+<Note>
+  The datasets are loaded into `st.session_state` to persist across page navigation without reloading.
+</Note>
+
+## Section 2: Análisis Exploratorio (EDA)
+
+### Interactive Dashboard
+
+The EDA section provides comprehensive data exploration tools:
+
+#### Filters
+
+<Accordion title="Filter Bar Implementation">
+  ```python
+  # From covid_app/eda.py:809-836
+  filter_bar = st.expander("Mostrar/Ocultar filtros", expanded=True)
+  with filter_bar:
+      fcol = st.columns([1.2, 1.2, 0.6])
+      
+      with fcol[0]:
+          seleccion_cont = st.selectbox(
+              "Filtrar por continente:", 
+              continentes, 
+              key="selectbox_continentes"
+          )
+          seleccion_indicador = filtro_indicadores(INDICADOR_OPTIONS)
+      
+      with fcol[1]:
+          seleccion_country = st.selectbox(
+              "Filtrar por país:", 
+              paises, 
+              key="selectbox_paises"
+          )
+          kpi_mode = filtro_modoKPIS()  # Totales vs Normalizados
+      
+      with fcol[2]:
+          st.button("🔁 Reiniciar filtros", on_click=reset_filtros)
+  ```
+</Accordion>
+
+**Available Filters**:
+- **Continent**: Focus on Africa, Asia, Europe, North America, Oceania, or South America
+- **Country**: Drill down to any of 191 countries
+- **Indicator**: Choose Cases, Deaths, Tests, or Vaccinations
+- **KPI Mode**: Toggle between absolute totals and per-capita normalized values
+
+#### Key Performance Indicators (KPIs)
+
+```python
+# From covid_app/eda.py:93-122
+def mostrar_kpis(df, mode="Totales"):
+    latest = df[df['date'] == df['date'].max()]
+    if mode == "Totales":
+        kpi_data = [
+            ("Casos totales", f"{latest['total_cases'].sum():,.0f}"),
+            ("Muertes totales", f"{latest['total_deaths'].sum():,.0f}"),
+            ("% Vacunados", f"{latest['vaccination_ratio'].mean():.1f}%"),
+            ("Total Pruebas", f"{latest['total_tests'].sum():,.0f}")
+        ]
+    else:  # Normalizados
+        kpi_data = [
+            ("Casos / millón", f"{latest['total_cases_per_million'].sum():,.0f}"),
+            ("Muertes / millón", f"{latest['total_deaths_per_million'].sum():,.0f}"),
+            ("% Vacunados", f"{latest['vaccination_ratio'].mean():.1f}%"),
+            ("Pruebas / mil", f"{latest['total_tests_per_thousand'].sum():,.0f}")
+        ]
+```
+
+KPIs dynamically update based on selected filters.
+
+#### Visualizations
+
+<Tabs>
+  <Tab title="Top/Bottom Countries">
+    **Horizontal bar charts** showing the 10 countries with highest and lowest values for the selected indicator.
+    
+    ```python
+    # From covid_app/eda.py:58-91
+    def plot_top_bottom_countries(df, column, N=10, colorscale=None):
+        latest = df[df['date'] == df['date'].max()]
+        top = latest[['country', column]].nlargest(N, column)
+        bottom = latest[['country', column]].nsmallest(N, column)
+        
+        # Create side-by-side bar charts
+        col1, col2 = st.columns([1,1])
+        col1.plotly_chart(make_bar(top, title_top), use_container_width=True)
+        col2.plotly_chart(make_bar(bottom, title_bottom), use_container_width=True)
+    ```
+  </Tab>
+  
+  <Tab title="Time Series Evolution">
+    **Multi-axis line charts** showing:
+    - Total vaccinations vs daily deaths and cases
+    - Tests vs cases over time
+    - Stringency index vs mortality
+    
+    Uses Plotly's `make_subplots` for dual y-axes.
+  </Tab>
+  
+  <Tab title="Continental Comparison">
+    **Grouped bar chart** with normalized values:
+    - Cases per million
+    - Deaths per million
+    - Tests per thousand
+    - Vaccination ratio
+    
+    ```python
+    # Normalize to max for visual comparison
+    for col in cols:
+        continent_avg_norm[col] = continent_avg_norm[col] / continent_avg_norm[col].max()
+    ```
+  </Tab>
+  
+  <Tab title="Scatter Plots">
+    **Three-panel scatter plot**:
+    1. Tests vs Cases (bubble size = GDP)
+    2. GDP vs Vaccination coverage
+    3. Cases vs Deaths (bubble size = median age)
+    
+    From `covid_app/eda.py:386-500`
+  </Tab>
+  
+  <Tab title="LOWESS Curves">
+    **Interactive lag analysis** of stringency index impact on cases/deaths with selectable time lags (0, 15, 30, 40, 60, 80 days).
+    
+    ```python
+    # Apply LOWESS smoothing
+    smoothed = sm.nonparametric.lowess(
+        df_plot['casos_lag'], 
+        df_plot['indice_rigurosidad'], 
+        frac=0.3
+    )
+    ```
+  </Tab>
+  
+  <Tab title="Interactive Map">
+    **Folium map** with country markers showing:
+    - Total cases
+    - Total deaths
+    - Total vaccinations
+    
+    Bubble size and color scale based on case counts.
+    
+    ```python
+    # From covid_app/eda.py:27-56
+    def create_country_map(df_map):
+        colormap = LinearColormap(
+            colors=["#c6dbef", "#6baed6", "#2171b5"],
+            vmin=df_map['total_cases'].min(),
+            vmax=df_map['total_cases'].max()
+        )
+        m = folium.Map(location=map_center, zoom_start=2)
+    ```
+  </Tab>
+</Tabs>
+
+### Customization
+
+<Tip>
+  All visualizations use **Plotly** for interactivity:
+  - Hover for details
+  - Zoom and pan
+  - Select traces to show/hide
+  - Download as PNG
+</Tip>
+
+## Section 3: Clustering
+
+### Interactive Cluster Exploration
+
+The clustering section allows users to:
+
+1. **Select clustering criterion**
+   - Socioeconomic factors (K-Means, k=3)
+   - Daily cases evolution (K-Shape, k=4)
+   - Daily deaths evolution (K-Shape, k=3)
+
+2. **Choose cluster to visualize**  
+   Radio buttons to select cluster 1, 2, 3, or 4
+
+3. **Select specific country**  
+   Dropdown to visualize individual country within the cluster
+
+```python
+# From covid_app/clustering.py:255-280
+col1, col2, col3 = st.columns(3)
+
+with col1:    
+    clustering_seleccionado = st.selectbox(
+        "Elige el criterio del agrupamiento:",
+        options=["Factores socieconomicos", 
+                 "Evolucion de casos diarios", 
+                 "Evolucion de muertes diarias"]
+    )
+
+with col2:
+    cluster_sel = st.radio(
+        'Selecciona el cluster que desee visualizar:', 
+        np.sort(df_cluster[tip_cluster].unique()),
+        horizontal=True
+    )
+
+with col3:
+    paises_es = sorted([esp for esp, ing in PAISES_SPANISH.items() 
+                        if ing in df_cluster.loc[df_cluster[tip_cluster]==cluster_sel, 'country'].unique()])
+    pais_seleccionado = st.selectbox("Visualizar un país:", options=paises_es)
+```
+
+### Cluster Visualizations
+
+<Accordion title="Socioeconomic Clustering">
+  For K-Means socioeconomic clustering:
+  - **Scatter plot**: Cases per million vs Deaths per million, colored by cluster
+  - **World map**: Geographic distribution of clusters using `px.scatter_geo`
+  
+  ```python
+  # From covid_app/clustering.py:56-91
+  def muestra_grafica_clusterkmeans3(latest_df, tip_mcluster):
+      fig = px.scatter(
+          latest_df,
+          x="total_cases_per_million",
+          y="total_deaths_per_million",
+          hover_name="country",
+          color="cluster_"+tip_mcluster,
+          color_discrete_map={"1": "blue", "2": "green", "3": "orange"}
+      )
+  ```
+</Accordion>
+
+<Accordion title="Temporal Clustering">
+  For K-Shape temporal clustering:
+  - **Line chart**: Evolution of daily cases or deaths for selected country
+  - **Cluster description**: Text explaining the pattern characteristics
+  
+  ```python
+  # From covid_app/clustering.py:93-144
+  def muestra_grafica_pais(df, tip_mcluster, colores_dict, pais):
+      if tip_mcluster == "caseskshape4":
+          indicador_col = 'new_cases_smoothed'
+      elif tip_mcluster == "deathskshape3":
+          indicador_col = 'new_deaths_smoothed'
+      
+      df_grouped = df.groupby('date', observed=True)[[indicador_col]].sum().reset_index()
+      
+      fig = px.line(df_grouped, x="date", y=indicador_col)
+      fig.update_traces(line=dict(color=color, width=2), fill="tozeroy")
+  ```
+</Accordion>
+
+### Cluster Descriptions
+
+Context-aware text descriptions explain each cluster:
+
+```python
+# From covid_app/clustering.py:25-54
+def muestra_texto_cluster(tip_mcluster, cluster_num):
+    if tip_mcluster=="kmeans3":
+        if cluster_num==1:
+            texto = "Cluster formado por países de África en general..."
+        elif cluster_num==2:
+            texto = "Cluster compuesto por países con buenas condiciones socioeconómicas..."
+        # ...
+    elif tip_mcluster=="caseskshape4":
+        # Temporal pattern descriptions
+```
+
+## Running Locally
+
+### Prerequisites
+
+```bash
+pip install streamlit pandas numpy plotly streamlit-option-menu folium streamlit-folium
+```
+
+### Launch the App
+
+<Steps>
+  <Step title="Clone Repository">
+    ```bash
+    git clone https://github.com/your-repo/covid19-data-analytics.git
+    cd covid19-data-analytics
+    ```
+  </Step>
+  
+  <Step title="Decompress Datasets">
+    ```bash
+    cd covid_app/datasets/outputs
+    unzip complete-datasets.zip
+    unzip filtered-datasets.zip
+    ```
+  </Step>
+  
+  <Step title="Update File Paths">
+    Edit `covid_app/eda.py` and `covid_app/clustering.py` to use local paths if needed.
+  </Step>
+  
+  <Step title="Run Streamlit">
+    ```bash
+    cd covid_app
+    streamlit run app.py
+    ```
+  </Step>
+</Steps>
+
+<Note>
+  The app will open in your browser at `http://localhost:8501`
+</Note>
+
+### Configuration
+
+```python
+# From covid_app/app.py:12-17
+st.set_page_config(
+    page_title="Análisis COVID-19",
+    page_icon="📊",
+    layout="wide",  # Use full screen width
+)
+```
+
+## App Architecture
+
+```
+covid_app/
+├── app.py              # Main entry point, navigation
+├── inicio.py           # Home page, dataset loading
+├── eda.py              # Exploratory analysis page
+├── clustering.py       # Clustering analysis page
+├── constantes.py       # Constants (continent colors, translations)
+├── datasets/
+│   ├── inputs/         # Raw OWID data (compressed)
+│   └── outputs/        # Processed datasets
+│       ├── complete-datasets/
+│       ├── filtered-datasets/
+│       └── cluster-countries.csv
+└── requirements.txt    # Python dependencies
+```
+
+### Session State Management
+
+```python
+# From covid_app/eda.py:778-809
+if "datasets" not in st.session_state:
+    st.warning("Debe situarse en la página de Inicio para cargar los datos")
+    st.stop()
+
+df, df_weekly, df_monthly, df_quarterly, df_yearly = st.session_state.datasets
+
+if "last_df" not in st.session_state:
+    st.session_state.last_df = df.sort_values('date').groupby('country', observed=True).tail(1)
+
+if "df_map" not in st.session_state:
+    st.session_state.df_map = prepare_map_data(st.session_state.last_df)
+```
+
+<Tip>
+  **Session state** persists data across page navigation, avoiding redundant loading and improving performance.
+</Tip>
+
+## Key Features Summary
+
+<CardGroup cols={2}>
+  <Card title="Real-Time Filtering" icon="filter">
+    Dynamic updates as users change continent, country, or indicator selections
+  </Card>
+  <Card title="Responsive Design" icon="mobile">
+    Wide layout optimized for desktop viewing with proper column arrangements
+  </Card>
+  <Card title="Multi-Language Support" icon="language">
+    Country and continent names translated to Spanish for local users
+  </Card>
+  <Card title="Performance Optimized" icon="gauge-high">
+    Pre-computed aggregations and session state caching for fast response
+  </Card>
+</CardGroup>
+
+## Technologies Used
+
+- **Streamlit**: Web application framework
+- **Plotly**: Interactive visualizations
+- **Folium**: Interactive maps
+- **Pandas**: Data manipulation
+- **NumPy**: Numerical operations
+- **streamlit-option-menu**: Enhanced navigation menu
+- **streamlit-folium**: Folium integration for Streamlit
+
+## Deployment
+
+The app is deployed on **Streamlit Cloud**:
+
+<Card title="Streamlit Cloud Deployment" icon="cloud" href="https://covid19-data-analytics-owid-xasv8wrmsgkmtautyfywth.streamlit.app/">
+  Free hosting with automatic updates from GitHub repository
+</Card>
+
+### Deployment Configuration
+
+Create `requirements.txt` in the app directory:
+
+```txt
+streamlit==1.28.0
+pandas==2.1.3
+numpy==1.24.3
+plotly==5.18.0
+streamlit-option-menu==0.3.6
+folium==0.15.0
+streamlit-folium==0.15.1
+statsmodels==0.14.0
+```
+
+## Extending the App
+
+To add new sections:
+
+<Steps>
+  <Step title="Create New Module">
+    Create `covid_app/my_analysis.py` with a `main()` function
+  </Step>
+  
+  <Step title="Update Navigation">
+    ```python
+    # In app.py
+    options=["Inicio", "Análisis Exploratorio", "Clustering", "My Analysis"]
+    
+    # ...
+    
+    elif selected == "My Analysis":
+        from my_analysis import main as my_analysis_main
+        my_analysis_main()
+    ```
+  </Step>
+  
+  <Step title="Access Session Data">
+    ```python
+    # In my_analysis.py
+    def main():
+        if "datasets" not in st.session_state:
+            st.warning("Load data from Inicio first")
+            st.stop()
+        
+        df = st.session_state.datasets[0]
+        # Your analysis here
+    ```
+  </Step>
+</Steps>
+
+## Related Resources
+
+<CardGroup cols={3}>
+  <Card title="Exploratory Analysis" icon="chart-bar" href="/features/exploratory-analysis">
+    Details on EDA methods and visualizations
+  </Card>
+  <Card title="Clustering" icon="diagram-3" href="/features/clustering">
+    Clustering algorithms and approaches
+  </Card>
+  <Card title="Predictive Modeling" icon="brain" href="/features/predictive-modeling">
+    Forecasting models (not yet in app)
+  </Card>
+</CardGroup>
