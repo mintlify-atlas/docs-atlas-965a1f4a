@@ -1,0 +1,93 @@
+{
+  "projectType": "saas",
+  "projectName": "COVID-19 Data Analytics",
+  "projectDescription": "Interactive data analytics platform for exploring global COVID-19 trends, clustering patterns, and predictive modeling using Our World in Data.",
+  "theme": "willow",
+  "primaryColor": "#cc4c48",
+  "lightColor": "#ffffff",
+  "darkColor": "#082546",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/exploratory-analysis",
+              "features/clustering",
+              "features/predictive-modeling",
+              "features/streamlit-app"
+            ]
+          },
+          {
+            "group": "Data & Methodology",
+            "pages": [
+              "data/dataset-overview",
+              "data/data-cleaning",
+              "data/preprocessing"
+            ]
+          },
+          {
+            "group": "Analysis Guides",
+            "pages": [
+              "guides/eda-workflow",
+              "guides/clustering-analysis",
+              "guides/time-series-forecasting",
+              "guides/visualization"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Modules",
+            "pages": [
+              "api/aux-functions",
+              "api/cleaning",
+              "api/clustering",
+              "api/eda"
+            ]
+          },
+          {
+            "group": "Streamlit App",
+            "pages": [
+              "api/app",
+              "api/constants"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Interactive Streamlit dashboard for COVID-19 data visualization",
+    "K-Shape clustering for temporal pattern analysis across countries",
+    "SARIMAX time-series forecasting for daily death predictions",
+    "Exploratory data analysis with correlation studies",
+    "Socioeconomic factor analysis (GDP, median age, stringency index)",
+    "Global and continental evolution tracking (cases, deaths, tests, vaccinations)"
+  ],
+  "publicApiSurface": [
+    "aux_functions.preanalyze_data()",
+    "aux_functions.visualize_distributions()",
+    "aux_functions.visualize_correlations()",
+    "cleaning._validate_schema()",
+    "cleaning._parse_dates()",
+    "cleaning._create_aux_features()",
+    "covid_app.app.main()",
+    "covid_app.inicio.main()",
+    "covid_app.eda.main()",
+    "covid_app.clustering.main()"
+  ]
+}
